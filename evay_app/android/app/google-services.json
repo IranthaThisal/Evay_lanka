@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "214523979621",
+    "project_id": "evay-lanka",
+    "storage_bucket": "evay-lanka.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:214523979621:android:acd43dae60c9c96306638c",
+        "android_client_info": {
+          "package_name": "com.example.evay_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "214523979621-tjf4ndmgr3p0gjlv1v3sumn90p2lssat.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLeuIBD2fMB4RzuzbFXVxzTD7t5J4v4H4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "214523979621-tjf4ndmgr3p0gjlv1v3sumn90p2lssat.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "214523979621-a3iml7mevq4gh29li4h720dec8jkrlct.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.evayLanka"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:214523979621:android:da14dc6c46f8c0ff06638c",
+        "android_client_info": {
+          "package_name": "com.example.evay_lanka"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "214523979621-tjf4ndmgr3p0gjlv1v3sumn90p2lssat.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLeuIBD2fMB4RzuzbFXVxzTD7t5J4v4H4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "214523979621-tjf4ndmgr3p0gjlv1v3sumn90p2lssat.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "214523979621-a3iml7mevq4gh29li4h720dec8jkrlct.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.evayLanka"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,14 @@
+﻿{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "EVay Lanka",
+      "request": "launch",
+      "type": "dart",
+      "program": "evay_app/lib/main.dart",
+      "toolArgs": [
+        "--dart-define=NEWS_API_KEY=1834ddb3babe466dad9e21adb2d1ddf7"
+      ]
+    }
+  ]
+}
