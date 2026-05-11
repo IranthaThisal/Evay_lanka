@@ -43,7 +43,7 @@ class HomeDashboard extends StatelessWidget {
           Center(
             child: Image.asset(
               "assets/images/ev_car.png",
-              height: 200,
+              height: 140,
               fit: BoxFit.contain,
             ),
           ),

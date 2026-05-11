@@ -252,7 +252,11 @@ class _VehicleAddCard extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Image.asset('assets/images/ev_car.png', height: 110),
+              Image.asset(
+                'assets/images/ev_car.png',
+                height: 90,
+                fit: BoxFit.contain,
+              ),
             ],
           ),
         ),
