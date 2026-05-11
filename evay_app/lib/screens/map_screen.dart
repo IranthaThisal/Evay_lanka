@@ -48,6 +48,10 @@ class _MapScreenState extends State<MapScreen> {
   Color get _panelBorder => _isLight ? const Color(0xFFE1E9E4) : Colors.white10;
   Color get _buttonOnAccent =>
       _isLight ? const Color(0xFF12351F) : Colors.white;
+  double get _collapsedChargerPanelHeight =>
+      _activeRangeAnxiety == null ? _minChargerPanelHeight : 220;
+  double get _detailChargerPanelThreshold =>
+      _activeRangeAnxiety == null ? _contentChargerPanelHeight : 300;
   double get _maxChargerPanelHeight =>
       math.min(MediaQuery.sizeOf(context).height * 0.48, 390);
 
@@ -428,6 +432,8 @@ class _MapScreenState extends State<MapScreen> {
                 ? 'No strong on-route backup charger was found for this trip.'
                 : 'Best backup charger: ${stop.charger.name} '
                     '(${stop.distanceFromRouteKm.toStringAsFixed(1)} km off route)',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: _onPanel,
               fontSize: 12.5,
@@ -526,15 +532,20 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildMapActions() {
+    final topInset = _showTripPlanner ? 330.0 : 160.0;
+    final bottomInset =
+        _chargerPanelHeight.clamp(
+          _collapsedChargerPanelHeight,
+          _maxChargerPanelHeight,
+        ) +
+        24;
+
     return Positioned(
+      top: topInset,
       right: 14,
-      bottom:
-          _chargerPanelHeight.clamp(
-            _minChargerPanelHeight,
-            _maxChargerPanelHeight,
-          ) +
-          24,
+      bottom: bottomInset,
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton.small(
             heroTag: 'locate',
@@ -571,8 +582,9 @@ class _MapScreenState extends State<MapScreen> {
       'all' => 'All Chargers',
       _ => 'Nearby Chargers',
     };
+    final minHeight = _collapsedChargerPanelHeight;
     final maxHeight = _maxChargerPanelHeight;
-    final contentVisible = _chargerPanelHeight >= _contentChargerPanelHeight;
+    final contentVisible = _chargerPanelHeight >= _detailChargerPanelThreshold;
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -581,25 +593,24 @@ class _MapScreenState extends State<MapScreen> {
           setState(() {
             _chargerPanelHeight =
                 (_chargerPanelHeight - details.delta.dy)
-                    .clamp(_minChargerPanelHeight, maxHeight)
+                    .clamp(minHeight, maxHeight)
                     .toDouble();
           });
         },
         onVerticalDragEnd: (details) {
           final velocity = details.primaryVelocity ?? 0;
-          final midpoint = (_minChargerPanelHeight + maxHeight) / 2;
+          final midpoint = (minHeight + maxHeight) / 2;
           final shouldExpand =
               velocity < -120 ||
               (velocity.abs() <= 120 && _chargerPanelHeight >= midpoint);
           setState(() {
-            _chargerPanelHeight =
-                shouldExpand ? maxHeight : _minChargerPanelHeight;
+            _chargerPanelHeight = shouldExpand ? maxHeight : minHeight;
           });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
-          height: _chargerPanelHeight.clamp(_minChargerPanelHeight, maxHeight),
+          height: _chargerPanelHeight.clamp(minHeight, maxHeight),
           decoration: BoxDecoration(
             color: _bg,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -613,7 +624,7 @@ class _MapScreenState extends State<MapScreen> {
                 onTap: () {
                   setState(() {
                     _chargerPanelHeight =
-                        contentVisible ? _minChargerPanelHeight : maxHeight;
+                        contentVisible ? minHeight : maxHeight;
                   });
                 },
                 child: Padding(
