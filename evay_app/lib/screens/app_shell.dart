@@ -26,6 +26,7 @@ class _AppShellState extends State<AppShell> {
         onOpenBookings: () => setState(() => _index = 3),
         onOpenBattery: () => setState(() => _index = 4),
         onOpenCommunity: () => setState(() => _index = 1),
+        onOpenProfile: () => setState(() => _index = 5),
       ),
       1 => CommunityPage(),
       2 => const MapScreen(),

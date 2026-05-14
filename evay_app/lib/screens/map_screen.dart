@@ -698,36 +698,45 @@ class _MapScreenState extends State<MapScreen> {
               ),
               if (contentVisible) ...[
                 const SizedBox(height: 14),
-                if (report != null) ...[
-                  _buildRaiCard(report),
-                  const SizedBox(height: 14),
-                ],
-                if (chargers.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: _panel,
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Text(
-                      context.l10n.t('noChargersMatch'),
-                      style: TextStyle(color: _onPanelMuted),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: chargers.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final charger = chargers[index];
-                        final meta = _chargerMeta(charger);
-                        return _chargerCard(charger, meta);
-                      },
-                    ),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      if (report != null) ...[
+                        _buildRaiCard(report),
+                        const SizedBox(height: 14),
+                      ],
+                      if (chargers.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: _panel,
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Text(
+                            context.l10n.t('noChargersMatch'),
+                            style: TextStyle(color: _onPanelMuted),
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          height: 220,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: chargers.length,
+                            separatorBuilder:
+                                (_, _) => const SizedBox(width: 12),
+                            itemBuilder: (context, index) {
+                              final charger = chargers[index];
+                              final meta = _chargerMeta(charger);
+                              return _chargerCard(charger, meta);
+                            },
+                          ),
+                        ),
+                    ],
                   ),
+                ),
               ],
             ],
           ),
