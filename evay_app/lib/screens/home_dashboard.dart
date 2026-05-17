@@ -72,16 +72,18 @@ class _HomeDashboardState extends State<HomeDashboard> {
 
             final data = snapshot.data?.data() ?? <String, dynamic>{};
             final vehicleMake = (data['vehicleMake'] as String?)?.trim() ?? '';
-            final vehicleModel = (data['vehicleModel'] as String?)?.trim() ?? '';
-            final vehicleName = [vehicleMake, vehicleModel]
-                .where((part) => part.isNotEmpty)
-                .join(' ');
+            final vehicleModel =
+                (data['vehicleModel'] as String?)?.trim() ?? '';
+            final vehicleName = [
+              vehicleMake,
+              vehicleModel,
+            ].where((part) => part.isNotEmpty).join(' ');
             final batteryKwh = (data['batteryKwh'] as num?)?.toDouble();
-            final storedBatteryPercent = (data['batteryPercent'] as num?)?.toDouble();
+            final storedBatteryPercent =
+                (data['batteryPercent'] as num?)?.toDouble();
             final efficiencyKmPerKwh =
                 (data['efficiencyKmPerKwh'] as num?)?.toDouble() ?? 6.0;
-            final batteryPercent =
-                _draftBatteryPercent ?? storedBatteryPercent;
+            final batteryPercent = _draftBatteryPercent ?? storedBatteryPercent;
             final hasVehicle = batteryKwh != null && vehicleName.isNotEmpty;
             final hasBatteryStatus = hasVehicle && batteryPercent != null;
             final availableKwh =
@@ -119,7 +121,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
-                ),
+                ),  
                 const SizedBox(height: 12),
                 Center(
                   child: Image.asset(
@@ -525,7 +527,10 @@ class _TipBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 4),
                 Text(body, style: Theme.of(context).textTheme.bodyMedium),
               ],
