@@ -55,6 +55,18 @@ class _MapScreenState extends State<MapScreen> {
   double get _maxChargerPanelHeight =>
       math.min(MediaQuery.sizeOf(context).height * 0.48, 390);
 
+  DrivingMode _drivingMode = DrivingMode.normal;
+  WeatherCondition _weatherCondition = WeatherCondition.dry;
+  int _passengerCount = 1;
+  double _cargoWeightKg = 0.0;
+
+  EvTripConditions get _tripConditions => EvTripConditions(
+    drivingMode: _drivingMode,
+    weather: _weatherCondition,
+    passengerCount: _passengerCount,
+    cargoWeightKg: _cargoWeightKg,
+  );
+
   final ChargerService _chargerService = ChargerService();
   final RouteService _routeService = RouteService();
   final SmartRouteService _smartRouteService = SmartRouteService();
@@ -285,6 +297,126 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _panelSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _panelBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DrivingMode>(
+                      value: _drivingMode,
+                      isDense: true,
+                      dropdownColor: _panel,
+                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
+                      items: DrivingMode.values.map((mode) {
+                        return DropdownMenuItem(
+                          value: mode,
+                          child: Text('${mode.label} Mode'),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _drivingMode = val);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _panelSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _panelBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<WeatherCondition>(
+                      value: _weatherCondition,
+                      isDense: true,
+                      dropdownColor: _panel,
+                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
+                      items: WeatherCondition.values.map((weather) {
+                        return DropdownMenuItem(
+                          value: weather,
+                          child: Text(weather.label),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _weatherCondition = val);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _panelSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _panelBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: _passengerCount,
+                      isDense: true,
+                      dropdownColor: _panel,
+                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
+                      items: [1, 2, 3, 4, 5].map((cnt) {
+                        return DropdownMenuItem(
+                          value: cnt,
+                          child: Text(cnt == 1 ? '1 Person' : '$cnt Passengers'),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _passengerCount = val);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _panelSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _panelBorder),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<double>(
+                      value: _cargoWeightKg,
+                      isDense: true,
+                      dropdownColor: _panel,
+                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
+                      items: const [0.0, 30.0, 60.0, 100.0, 150.0].map((cargo) {
+                        return DropdownMenuItem(
+                          value: cargo,
+                          child: Text(cargo == 0 ? 'No Cargo' : '+${cargo.toInt()}kg Cargo'),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _cargoWeightKg = val);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
@@ -424,12 +556,79 @@ class _MapScreenState extends State<MapScreen> {
                 'Trip ${report.routeDistanceKm.toStringAsFixed(0)} km',
               ),
               _metricChip('Buffer ${report.bufferKm.toStringAsFixed(0)} km'),
+              _metricChip('Safety ${report.safetyMargin.toStringAsFixed(2)}x'),
               if (report.totalElevationGainM > 100)
                 _metricChip('Ascent +${report.totalElevationGainM.toStringAsFixed(0)}m'),
+              if (report.conditions.weather != WeatherCondition.dry)
+                _metricChip('${report.conditions.weather.label} (+${((report.conditions.weather.rollingResistanceMultiplier - 1.0) * 100).toStringAsFixed(0)}%)'),
+              if (report.conditions.drivingMode != DrivingMode.normal)
+                _metricChip('${report.conditions.drivingMode.label} Mode'),
+              if (report.conditions.addedPayloadMassKg > 0)
+                _metricChip('+${report.conditions.addedPayloadMassKg.toStringAsFixed(0)}kg Payload'),
               if (report.chargingStops.length > 1)
                 _metricChip('${report.chargingStops.length} Corridor Stops'),
             ],
           ),
+          if (report.pointOfNoReturn case final pnr?) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: pnr.isSafeToReturn
+                    ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                    : const Color(0xFFDC2626).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: pnr.isSafeToReturn
+                      ? const Color(0xFF16A34A).withValues(alpha: 0.3)
+                      : const Color(0xFFDC2626).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    pnr.isSafeToReturn
+                        ? Icons.replay_circle_filled_rounded
+                        : Icons.warning_amber_rounded,
+                    color: pnr.isSafeToReturn
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFDC2626),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pnr.isSafeToReturn
+                              ? 'Round-Trip Return: Verified Safe'
+                              : 'Point of No Return Alert (at ${pnr.pointOfNoReturnKmFromOrigin.toStringAsFixed(0)} km)',
+                          style: TextStyle(
+                            color: pnr.isSafeToReturn
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFDC2626),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          pnr.warningMessage,
+                          style: TextStyle(
+                            color: _onPanel,
+                            fontSize: 11.5,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           if (report.chargingStops.isEmpty)
             Text(
@@ -566,7 +765,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildMapActions() {
-    final topInset = _showTripPlanner ? 330.0 : 160.0;
+    final topInset = _showTripPlanner ? 430.0 : 160.0;
     final bottomInset =
         _chargerPanelHeight.clamp(
           _collapsedChargerPanelHeight,
@@ -1085,6 +1284,7 @@ class _MapScreenState extends State<MapScreen> {
         batteryCapacityKwh: batteryCapacity,
         batteryPercent: batteryPercent,
         efficiencyKmPerKwh: efficiency,
+        conditions: _tripConditions,
       );
       final route = RouteDetails(
         points: smartRoute.routePoints,
@@ -1097,6 +1297,8 @@ class _MapScreenState extends State<MapScreen> {
         batteryCapacityKwh: batteryCapacity,
         batteryPercent: batteryPercent,
         efficiencyKmPerKwh: efficiency,
+        conditions: _tripConditions,
+        availableChargers: chargers,
       );
 
       if (!mounted) return;

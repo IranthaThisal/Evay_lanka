@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../models/charger.dart';
 import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
 
@@ -22,17 +23,23 @@ class RangeAnxietyService {
     required double batteryCapacityKwh,
     required double batteryPercent,
     required double efficiencyKmPerKwh,
+    EvTripConditions conditions = const EvTripConditions(),
     double climateFactor = defaultClimateFactor,
+    List<Charger> availableChargers = const [],
   }) {
     final routeDistanceKm = _routeDistanceKm(smartRoute.routePoints);
     final normalizedBatteryPercent = batteryPercent.clamp(0.0, 100.0).toDouble();
     final availableKwh = batteryCapacityKwh * (normalizedBatteryPercent / 100.0);
     final ratedEfficiencyKwhPerKm = efficiencyKmPerKwh <= 0 ? 0.18 : 1.0 / efficiencyKmPerKwh;
+
+    // Environmental consumption factor: tropical climate + driver mode + rain + payload
+    final totalEnvironmentalFactor = climateFactor * conditions.compositeEnvironmentalMultiplier;
+    final effectiveEfficiencyKwhPerKm = ratedEfficiencyKwhPerKm * totalEnvironmentalFactor;
     
-    // Total estimated route energy including HVAC climate factor and Sri Lanka elevation penalty
-    final routeEnergyDemandKwh = (routeDistanceKm * ratedEfficiencyKwhPerKm * climateFactor) +
+    // Total estimated route energy including HVAC, driver/payload, weather, and topography
+    final routeEnergyDemandKwh = (routeDistanceKm * effectiveEfficiencyKwhPerKm) +
         smartRoute.elevationEnergyPenaltyKwh;
-    final estimatedRangeKm = availableKwh * efficiencyKmPerKwh;
+    final estimatedRangeKm = availableKwh / effectiveEfficiencyKwhPerKm;
 
     final recommendedStop =
         smartRoute.chargingStops.isEmpty
@@ -52,7 +59,7 @@ class RangeAnxietyService {
         : math.max(0.0, (totalEffectiveKwh - routeEnergyDemandKwh) / totalEffectiveKwh);
 
     // Sub-score 2: Route Feasibility Score mr = min(1, Rrem / D)
-    final double effectiveRangeKm = totalEffectiveKwh * efficiencyKmPerKwh;
+    final double effectiveRangeKm = totalEffectiveKwh / effectiveEfficiencyKwhPerKm;
     final double mr = routeDistanceKm <= 0
         ? 1.0
         : math.min(1.0, effectiveRangeKm / routeDistanceKm);
@@ -67,20 +74,37 @@ class RangeAnxietyService {
         : math.min(1.0, nStations / nRequired);
     final double mc = (stationRatio * chargerFactor).clamp(0.0, 1.0);
 
+    // Dynamic Safety Margin: Replaces static 1.15-1.25 multiplier with responsive environmental formula
+    final dynamicSafetyMargin = computeDynamicSafetyMargin(
+      conditions: conditions,
+      hasCorridorChargers: smartRoute.chargingStops.isNotEmpty,
+      elevationGainM: smartRoute.totalElevationGainM,
+    );
+
     // Composite RAI Formula (Eq. 6)
     final double compositeRai = (wb * mb) + (wr * mr) + (wc * mc);
     final int score = (compositeRai * 100).round().clamp(0, 100);
 
-    // Safety margin buffer
-    final safetyMargin = smartRoute.chargingStops.isEmpty ? 1.25 : 1.15;
-    final requiredDistanceKm = routeDistanceKm * safetyMargin;
+    final requiredDistanceKm = routeDistanceKm * dynamicSafetyMargin;
     final bufferKm = effectiveRangeKm - requiredDistanceKm;
+
+    // Round-Trip & Point of No Return calculation
+    final pointOfNoReturn = computePointOfNoReturn(
+      smartRoute: smartRoute,
+      batteryCapacityKwh: batteryCapacityKwh,
+      availableKwh: availableKwh,
+      effectiveEfficiencyKwhPerKm: effectiveEfficiencyKwhPerKm,
+      safetyMargin: dynamicSafetyMargin,
+      availableChargers: availableChargers,
+    );
 
     final (label, summary) = _statusFor(
       score: score,
       bufferKm: bufferKm,
       stops: smartRoute.chargingStops,
       elevationGainM: smartRoute.totalElevationGainM,
+      conditions: conditions,
+      pnr: pointOfNoReturn,
     );
 
     return RangeAnxietyReport(
@@ -92,11 +116,159 @@ class RangeAnxietyService {
       requiredDistanceKm: requiredDistanceKm,
       bufferKm: bufferKm,
       chargerFactor: chargerFactor,
-      safetyMargin: safetyMargin,
+      safetyMargin: dynamicSafetyMargin,
       recommendedStop: recommendedStop,
       chargingStops: smartRoute.chargingStops,
       totalElevationGainM: smartRoute.totalElevationGainM,
       elevationEnergyPenaltyKwh: smartRoute.elevationEnergyPenaltyKwh,
+      conditions: conditions,
+      pointOfNoReturn: pointOfNoReturn,
+    );
+  }
+
+  /// Dynamically computes safety multiplier based on environment, weather, payload, and relief.
+  /// Replaces the legacy fixed 1.15 - 1.25 constant.
+  double computeDynamicSafetyMargin({
+    required EvTripConditions conditions,
+    required bool hasCorridorChargers,
+    required double elevationGainM,
+  }) {
+    double margin = 1.06; // Baseline 6% emergency reserve
+
+    // 1. Corridor charger backup reserve
+    if (!hasCorridorChargers) {
+      margin += 0.12; // Extra 12% buffer if corridor has no backup chargers
+    } else {
+      margin += 0.04;
+    }
+
+    // 2. Weather / Rain factor (wet tarmac rolling resistance & braking safety)
+    margin += switch (conditions.weather) {
+      WeatherCondition.dry => 0.00,
+      WeatherCondition.lightRain => 0.03,
+      WeatherCondition.heavyMonsoon => 0.08,
+    };
+
+    // 3. Driving Mode factor
+    margin += switch (conditions.drivingMode) {
+      DrivingMode.eco => 0.00,
+      DrivingMode.normal => 0.02,
+      DrivingMode.sport => 0.05,
+    };
+
+    // 4. Payload factor (heavy passenger/cargo weight requires larger braking/acceleration margin)
+    if (conditions.addedPayloadMassKg > 150.0) {
+      margin += 0.03;
+    }
+
+    // 5. Elevation climb factor (steep hill country ascents like Kandy/Nuwara Eliya)
+    if (elevationGainM > 400.0) {
+      margin += 0.04;
+    }
+
+    return margin; // Dynamically spans ~1.10x up to ~1.38x
+  }
+
+  /// Computes Point of No Return (PNR) and whether driver can safely return
+  /// to the last known reliable DC charger if destination charging is unavailable.
+  PointOfNoReturnInfo? computePointOfNoReturn({
+    required SmartRoute smartRoute,
+    required double batteryCapacityKwh,
+    required double availableKwh,
+    required double effectiveEfficiencyKwhPerKm,
+    required double safetyMargin,
+    required List<Charger> availableChargers,
+  }) {
+    if (smartRoute.routePoints.isEmpty) return null;
+
+    final destination = smartRoute.destination;
+
+    // Identify last reliable DC charger prior to destination
+    Charger? lastReliableCharger;
+    double distToLastChargerKm = 0.0;
+
+    if (smartRoute.chargingStops.isNotEmpty) {
+      final lastStop = smartRoute.chargingStops.last;
+      lastReliableCharger = lastStop.charger;
+      distToLastChargerKm = Geolocator.distanceBetween(
+            destination.latitude,
+            destination.longitude,
+            lastReliableCharger.lat,
+            lastReliableCharger.lng,
+          ) /
+          1000.0;
+    } else if (availableChargers.isNotEmpty) {
+      // Find closest charger along the route behind or near destination
+      double minDistance = double.infinity;
+      for (final charger in availableChargers) {
+        final d = Geolocator.distanceBetween(
+              destination.latitude,
+              destination.longitude,
+              charger.lat,
+              charger.lng,
+            ) /
+            1000.0;
+        if (d < minDistance) {
+          minDistance = d;
+          lastReliableCharger = charger;
+        }
+      }
+      distToLastChargerKm = minDistance;
+    }
+
+    if (lastReliableCharger == null) return null;
+
+    // Energy needed to return from destination to last reliable charger
+    final energyNeededToReturnKwh = distToLastChargerKm * effectiveEfficiencyKwhPerKm * safetyMargin;
+
+    // Estimated battery remaining upon arriving at destination
+    final totalTripDistanceKm = _routeDistanceKm(smartRoute.routePoints);
+    final tripEnergyUsedKwh = (totalTripDistanceKm * effectiveEfficiencyKwhPerKm) +
+        smartRoute.elevationEnergyPenaltyKwh;
+
+    double arrivalKwhAtDest = availableKwh;
+    for (final stop in smartRoute.chargingStops) {
+      arrivalKwhAtDest += stop.energyAddedKwh;
+    }
+    arrivalKwhAtDest = math.max(0.0, arrivalKwhAtDest - tripEnergyUsedKwh);
+
+    // Remaining battery after returning from destination to last charger
+    final returnBatteryRemainingKwh = arrivalKwhAtDest - energyNeededToReturnKwh;
+    final returnBatteryPercent = (returnBatteryRemainingKwh / batteryCapacityKwh) * 100.0;
+
+    // Determine return confidence classification
+    final ReturnConfidence confidence;
+    final String warning;
+
+    if (returnBatteryPercent >= 12.0) {
+      confidence = ReturnConfidence.safeReturn;
+      warning = 'Safe turnaround guaranteed. You can safely return to ${lastReliableCharger.name} '
+          '(${distToLastChargerKm.toStringAsFixed(1)} km back) with ${returnBatteryPercent.toStringAsFixed(0)}% battery remaining.';
+    } else if (returnBatteryPercent >= 0.0) {
+      confidence = ReturnConfidence.destinationDependent;
+      warning = 'Caution: Returning to ${lastReliableCharger.name} will deplete battery to ${returnBatteryPercent.toStringAsFixed(0)}%. '
+          'Destination charging is strongly advised.';
+    } else {
+      confidence = ReturnConfidence.pointOfNoReturnExceeded;
+      final arrivalPct = (arrivalKwhAtDest / batteryCapacityKwh) * 100.0;
+      warning = '⚠️ Point of No Return exceeded! Battery at destination (${arrivalPct.toStringAsFixed(0)}%) '
+          'cannot reach ${lastReliableCharger.name} (${distToLastChargerKm.toStringAsFixed(1)} km back). Destination charging is mandatory!';
+    }
+
+    // Calculate Point of No Return (distance from origin where vehicle commits)
+    final pnrDistanceKm = math.max(
+      0.0,
+      totalTripDistanceKm - (distToLastChargerKm * (arrivalKwhAtDest > 0 ? 0.85 : 0.5)),
+    );
+
+    return PointOfNoReturnInfo(
+      lastReliableCharger: lastReliableCharger,
+      distanceToLastChargerKm: distToLastChargerKm,
+      energyNeededToReturnKwh: energyNeededToReturnKwh,
+      returnBatteryPercentRemaining: returnBatteryPercent,
+      confidence: confidence,
+      pointOfNoReturnKmFromOrigin: pnrDistanceKm,
+      warningMessage: warning,
     );
   }
 
@@ -148,26 +320,40 @@ class RangeAnxietyService {
     required double bufferKm,
     required List<ChargingStop> stops,
     required double elevationGainM,
+    required EvTripConditions conditions,
+    required PointOfNoReturnInfo? pnr,
   }) {
-    final elevNote = elevationGainM > 300
-        ? ' Includes +${elevationGainM.toStringAsFixed(0)}m elevation climb.'
-        : '';
+    final conditionNotes = <String>[];
+    if (conditions.weather != WeatherCondition.dry) {
+      conditionNotes.add(conditions.weather.label);
+    }
+    if (conditions.drivingMode != DrivingMode.normal) {
+      conditionNotes.add('${conditions.drivingMode.label} Mode');
+    }
+    if (conditions.addedPayloadMassKg > 0) {
+      conditionNotes.add('+${conditions.addedPayloadMassKg.toStringAsFixed(0)}kg payload');
+    }
+    if (elevationGainM > 300) {
+      conditionNotes.add('+${elevationGainM.toStringAsFixed(0)}m climb');
+    }
+
+    final envSuffix = conditionNotes.isNotEmpty ? ' [${conditionNotes.join(', ')}]' : '';
 
     if (score >= 70) {
       if (stops.isEmpty) {
         return (
           'Safe trip',
-          'You can complete this route comfortably on your current charge.$elevNote',
+          'You can complete this route comfortably on your current charge.$envSuffix',
         );
       } else if (stops.length == 1) {
         return (
           'Safe trip (1 Stop)',
-          'Route is fully secured with 1 planned charging stop (~${stops.first.chargingTimeMinutes.toStringAsFixed(0)} min charge).$elevNote',
+          'Route is fully secured with 1 planned charging stop (~${stops.first.chargingTimeMinutes.toStringAsFixed(0)} min charge).$envSuffix',
         );
       } else {
         return (
           'Safe trip (${stops.length} Stops)',
-          'Corridor planned with ${stops.length} consecutive charging stops to prevent battery depletion.$elevNote',
+          'Corridor planned with ${stops.length} consecutive charging stops to prevent battery depletion.$envSuffix',
         );
       }
     }
@@ -176,12 +362,12 @@ class RangeAnxietyService {
       if (stops.isEmpty) {
         return (
           'Charge recommended',
-          'Battery margin is tight for this distance.$elevNote A charging stop along the corridor is advised.',
+          'Battery margin is tight for this distance.$envSuffix A charging stop along the corridor is advised.',
         );
       } else {
         return (
           'Charge recommended',
-          '${stops.length} charging stops identified. Monitor battery levels, especially on steep ascents.$elevNote',
+          '${stops.length} charging stops identified. Monitor battery levels closely.$envSuffix',
         );
       }
     }
@@ -189,8 +375,8 @@ class RangeAnxietyService {
     return (
       'High risk',
       stops.isEmpty
-          ? 'Route distance exceeds current range.$elevNote No accessible corridor chargers found before battery depletion.'
-          : 'High risk of battery exhaustion before reaching planned stops.$elevNote Charge vehicle before starting this trip.',
+          ? 'Route distance exceeds current range.$envSuffix No accessible corridor chargers found before battery depletion.'
+          : 'High risk of battery exhaustion before reaching planned stops.$envSuffix Charge vehicle before departure.',
     );
   }
 }
