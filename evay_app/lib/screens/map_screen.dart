@@ -9,6 +9,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/charger.dart';
+import '../models/charger_checkin.dart';
+import '../services/checkin_service.dart';
+import 'checkin_dialog.dart';
 import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
 import '../services/charger_service.dart';
@@ -68,6 +71,7 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   final ChargerService _chargerService = ChargerService();
+  final CheckInService _checkInService = CheckInService();
   final RouteService _routeService = RouteService();
   final SmartRouteService _smartRouteService = SmartRouteService();
   final RangeAnxietyService _rangeAnxietyService = const RangeAnxietyService();
@@ -1277,6 +1281,9 @@ class _MapScreenState extends State<MapScreen> {
         locations.first.latitude,
         locations.first.longitude,
       );
+      final reliabilityScores = await _checkInService.getReliabilityScores(
+        chargers.map((c) => c.id).toList(),
+      );
       final smartRoute = await _smartRouteService.planFastestRouteWithChargers(
         origin: _currentLocation!,
         destination: destination,
@@ -1285,6 +1292,7 @@ class _MapScreenState extends State<MapScreen> {
         batteryPercent: batteryPercent,
         efficiencyKmPerKwh: efficiency,
         conditions: _tripConditions,
+        reliabilityScores: reliabilityScores,
       );
       final route = RouteDetails(
         points: smartRoute.routePoints,
@@ -1407,24 +1415,86 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       backgroundColor: _panel,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                charger.name,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: _onPanel,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                charger.city.isEmpty ? 'Sri Lanka' : charger.city,
-                style: TextStyle(color: _onPanelMuted),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          charger.name,
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: _onPanel,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          charger.city.isEmpty ? 'Sri Lanka' : charger.city,
+                          style: TextStyle(color: _onPanelMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  StreamBuilder<ChargerReliabilitySummary>(
+                    stream: _checkInService.watchReliability(charger.id),
+                    builder: (context, snap) {
+                      final summary = snap.data ??
+                          const ChargerReliabilitySummary(
+                            score: 9.0,
+                            totalCheckIns: 0,
+                            successCount: 0,
+                            failureCount: 0,
+                          );
+
+                      final isDown = summary.isReportedDownRecently;
+                      final tone = isDown
+                          ? const Color(0xFFDC2626)
+                          : summary.isHighReliability
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFD97706);
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: tone.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: tone.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isDown ? Icons.warning_amber_rounded : Icons.star_rounded,
+                              color: tone,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isDown
+                                  ? 'Issue Reported'
+                                  : '★ ${summary.score.toStringAsFixed(1)}',
+                              style: TextStyle(
+                                color: tone,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -1456,11 +1526,11 @@ class _MapScreenState extends State<MapScreen> {
                         backgroundColor: _accent,
                         foregroundColor: _buttonOnAccent,
                       ),
-                      icon: const Icon(Icons.book_online),
-                      label: const Text('Book Slot'),
+                      icon: const Icon(Icons.book_online, size: 18),
+                      label: const Text('Book'),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
@@ -1471,11 +1541,84 @@ class _MapScreenState extends State<MapScreen> {
                         foregroundColor: _onPanel,
                         side: BorderSide(color: _panelBorder),
                       ),
-                      icon: const Icon(Icons.directions),
-                      label: const Text('Directions'),
+                      icon: const Icon(Icons.directions, size: 18),
+                      label: const Text('Route'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        CheckInSheet.show(context, charger);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF16A34A),
+                        side: BorderSide(color: const Color(0xFF16A34A).withValues(alpha: 0.5)),
+                      ),
+                      icon: const Icon(Icons.how_to_reg, size: 18),
+                      label: const Text('Check In'),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Recent Community Reports',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: _onPanel,
+                ),
+              ),
+              const SizedBox(height: 8),
+              StreamBuilder<List<ChargerCheckIn>>(
+                stream: _checkInService.watchRecentCheckIns(charger.id, limit: 2),
+                builder: (context, snap) {
+                  final list = snap.data ?? [];
+                  if (list.isEmpty) {
+                    return Text(
+                      'No recent driver reports. Be the first to check in!',
+                      style: TextStyle(fontSize: 11.5, color: _onPanelMuted),
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      for (final c in list)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                c.outcome == CheckInOutcome.success
+                                    ? Icons.check_circle
+                                    : c.outcome == CheckInOutcome.couldNotCharge
+                                        ? Icons.error
+                                        : Icons.comment,
+                                color: c.outcome == CheckInOutcome.success
+                                    ? const Color(0xFF16A34A)
+                                    : c.outcome == CheckInOutcome.couldNotCharge
+                                        ? const Color(0xFFDC2626)
+                                        : const Color(0xFF0284C7),
+                                size: 15,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '${c.userName} (${c.vehicleModel ?? 'EV'}): ${c.outcome == CheckInOutcome.couldNotCharge ? c.issue.label : (c.comment.isNotEmpty ? c.comment : 'Charged successfully')}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11.5, color: _onPanel),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
