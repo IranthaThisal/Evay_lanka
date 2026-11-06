@@ -1048,6 +1048,9 @@ class _MapScreenState extends State<MapScreen> {
         origin: _currentLocation!,
         destination: destination,
         chargers: chargers,
+        batteryCapacityKwh: batteryCapacity,
+        batteryPercent: batteryPercent,
+        efficiencyKmPerKwh: efficiency,
       );
       final route = RouteDetails(
         points: smartRoute.routePoints,

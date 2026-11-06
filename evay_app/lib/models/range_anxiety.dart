@@ -25,6 +25,7 @@ class RangeAnxietyReport {
   final double safetyMargin;
   final ChargingStop? recommendedStop;
 
-  bool get isSafe => score >= 80;
-  bool get shouldChargeSoon => score >= 50 && score < 80;
+  bool get isSafe => score >= 70;
+  bool get shouldChargeSoon => score >= 40 && score < 70;
+  bool get isHighRisk => score < 40;
 }
