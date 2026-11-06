@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/charger.dart';
+import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
 import 'route_service.dart';
 
@@ -247,6 +248,7 @@ class SmartRouteService {
     double? batteryCapacityKwh,
     double? batteryPercent,
     double? efficiencyKmPerKwh,
+    EvTripConditions conditions = const EvTripConditions(),
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
@@ -259,6 +261,7 @@ class SmartRouteService {
     final (gainM, lossM) = _elevationModel.computeGainAndLoss(route.points);
     final elevationEnergyPenaltyKwh = _elevationModel.computeElevationEnergyDelta(
       deltaElevationM: gainM - (lossM * 0.70),
+      vehicleMassKg: conditions.totalVehicleMassKg,
     );
 
     final stops = recommendChargingStops(
@@ -271,6 +274,7 @@ class SmartRouteService {
       batteryCapacityKwh: batteryCapacityKwh,
       batteryPercent: batteryPercent,
       efficiencyKmPerKwh: efficiencyKmPerKwh,
+      conditions: conditions,
       climateFactor: climateFactor,
       reserveThresholdPercent: reserveThresholdPercent,
       targetChargePercent: targetChargePercent,
@@ -309,6 +313,7 @@ class SmartRouteService {
     double? batteryCapacityKwh,
     double? batteryPercent,
     double? efficiencyKmPerKwh,
+    EvTripConditions conditions = const EvTripConditions(),
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
@@ -333,6 +338,9 @@ class SmartRouteService {
     final ratedEfficiencyKwhPerKm = (efficiencyKmPerKwh != null && efficiencyKmPerKwh > 0)
         ? (1.0 / efficiencyKmPerKwh)
         : 0.18; // Default ~18 kWh/100km
+
+    // Environmental consumption factor: tropical climate + driver mode + rain + payload
+    final totalEnvironmentalFactor = climateFactor * conditions.compositeEnvironmentalMultiplier;
 
     double currentSocKwh = capacity * ((batteryPercent ?? 70.0).clamp(5.0, 100.0) / 100.0);
     double currentSocPercent = (currentSocKwh / capacity) * 100.0;
@@ -361,10 +369,11 @@ class SmartRouteService {
       final segDistanceKm = cumulativeDistances[i] - cumulativeDistances[i - 1];
       final deltaElevationM = elevations[i] - elevations[i - 1];
 
-      // Base energy consumption + Sri Lanka topography energy factor
-      final baseEnergyKwh = segDistanceKm * ratedEfficiencyKwhPerKm * climateFactor;
+      // Base energy consumption (environmental scaled) + Sri Lanka topography energy factor
+      final baseEnergyKwh = segDistanceKm * ratedEfficiencyKwhPerKm * totalEnvironmentalFactor;
       final elevationEnergyKwh = _elevationModel.computeElevationEnergyDelta(
         deltaElevationM: deltaElevationM,
+        vehicleMassKg: conditions.totalVehicleMassKg,
       );
       final segmentEnergyKwh = baseEnergyKwh + elevationEnergyKwh;
 
@@ -373,7 +382,6 @@ class SmartRouteService {
 
       // Project next step to prevent stranding below critical 12% reserve
       final isNearReserve = currentSocPercent <= reserveThresholdPercent;
-      final isEndOfTrip = i == n - 1;
 
       if ((isNearReserve && stops.length < maxStops) ||
           (currentSocKwh < reserveFloorKwh && stops.length < maxStops)) {
