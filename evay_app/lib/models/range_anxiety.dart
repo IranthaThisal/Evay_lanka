@@ -12,6 +12,9 @@ class RangeAnxietyReport {
     required this.chargerFactor,
     required this.safetyMargin,
     this.recommendedStop,
+    this.chargingStops = const [],
+    this.totalElevationGainM = 0.0,
+    this.elevationEnergyPenaltyKwh = 0.0,
   });
 
   final int score;
@@ -24,6 +27,9 @@ class RangeAnxietyReport {
   final double chargerFactor;
   final double safetyMargin;
   final ChargingStop? recommendedStop;
+  final List<ChargingStop> chargingStops;
+  final double totalElevationGainM;
+  final double elevationEnergyPenaltyKwh;
 
   bool get isSafe => score >= 70;
   bool get shouldChargeSoon => score >= 40 && score < 70;
