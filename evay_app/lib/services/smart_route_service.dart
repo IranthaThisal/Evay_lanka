@@ -219,7 +219,7 @@ class SpatialChargerIndex {
 
 /// Smart Route Service:
 /// Supports Multi-Stop Corridor Planning, Sri Lanka Topography & Elevation Modeling,
-/// and Spatial Bounding-Box Indexing for high-performance EV routing.
+/// Spatial Bounding-Box Indexing, and Crowdsourced Station Reliability ("LankaScore").
 class SmartRouteService {
   SmartRouteService({
     RouteService? routeService,
@@ -249,6 +249,7 @@ class SmartRouteService {
     double? batteryPercent,
     double? efficiencyKmPerKwh,
     EvTripConditions conditions = const EvTripConditions(),
+    Map<String, double> reliabilityScores = const {},
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
@@ -275,6 +276,7 @@ class SmartRouteService {
       batteryPercent: batteryPercent,
       efficiencyKmPerKwh: efficiencyKmPerKwh,
       conditions: conditions,
+      reliabilityScores: reliabilityScores,
       climateFactor: climateFactor,
       reserveThresholdPercent: reserveThresholdPercent,
       targetChargePercent: targetChargePercent,
@@ -314,6 +316,7 @@ class SmartRouteService {
     double? batteryPercent,
     double? efficiencyKmPerKwh,
     EvTripConditions conditions = const EvTripConditions(),
+    Map<String, double> reliabilityScores = const {},
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
@@ -406,7 +409,7 @@ class SmartRouteService {
         }
 
         if (candidateMap.isNotEmpty) {
-          // Score candidate chargers using normalized multi-criteria function
+          // Score candidate chargers using normalized multi-criteria function + LankaScore
           Charger? bestCharger;
           double bestScore = -1.0;
           double bestDetourKm = double.infinity;
@@ -417,6 +420,7 @@ class SmartRouteService {
             final detourKm = entry.$2;
             final wpIdx = entry.$3;
             final distFromOriginKm = cumulativeDistances[wpIdx];
+            final reliability = reliabilityScores[charger.id] ?? 9.0;
 
             final score = _scoreCandidateCharger(
               charger: charger,
@@ -424,6 +428,7 @@ class SmartRouteService {
               progressDistanceKm: distFromOriginKm,
               totalRouteDistanceKm: totalRouteDistanceKm,
               maxDetourKm: maxDistanceFromRouteKm,
+              reliabilityScore: reliability,
             );
 
             if (score > bestScore) {
@@ -478,6 +483,7 @@ class SmartRouteService {
     required double progressDistanceKm,
     required double totalRouteDistanceKm,
     required double maxDetourKm,
+    double reliabilityScore = 10.0,
   }) {
     // 1. Closeness to corridor (closer = higher score)
     final closenessScore = (1.0 - (detourDistanceKm / maxDetourKm)).clamp(0.0, 1.0);
@@ -493,10 +499,15 @@ class SmartRouteService {
         ? (progressDistanceKm / totalRouteDistanceKm).clamp(0.0, 1.0)
         : 0.5;
 
-    return (closenessScore * 0.35) +
+    // 5. LankaScore reliability weighting (penalize stations reported with issues/power cuts)
+    final reliabilityFactor = (reliabilityScore / 10.0).clamp(0.2, 1.0);
+
+    final rawScore = (closenessScore * 0.35) +
         (powerScore * 0.30) +
         (slotScore * 0.20) +
         (progressScore * 0.15);
+
+    return rawScore * reliabilityFactor;
   }
 
   /// Calculates normalized composite routing cost (Eq. 1)
