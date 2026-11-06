@@ -29,8 +29,9 @@ class RangeAnxietyService {
     final availableKwh = batteryCapacityKwh * (normalizedBatteryPercent / 100.0);
     final ratedEfficiencyKwhPerKm = efficiencyKmPerKwh <= 0 ? 0.18 : 1.0 / efficiencyKmPerKwh;
     
-    // Total estimated route energy with climate factor
-    final routeEnergyDemandKwh = routeDistanceKm * ratedEfficiencyKwhPerKm * climateFactor;
+    // Total estimated route energy including HVAC climate factor and Sri Lanka elevation penalty
+    final routeEnergyDemandKwh = (routeDistanceKm * ratedEfficiencyKwhPerKm * climateFactor) +
+        smartRoute.elevationEnergyPenaltyKwh;
     final estimatedRangeKm = availableKwh * efficiencyKmPerKwh;
 
     final recommendedStop =
@@ -38,14 +39,12 @@ class RangeAnxietyService {
             ? null
             : smartRoute.chargingStops.first;
 
-    // Additional energy injected if an optimal charging stop is included
-    final double injectedKwh = recommendedStop == null
-        ? 0.0
-        : math.min(
-            (batteryCapacityKwh * 0.80) - math.max(0.0, availableKwh - (recommendedStop.distanceFromOriginKm * ratedEfficiencyKwhPerKm)),
-            batteryCapacityKwh * 0.70,
-          );
-    final double totalEffectiveKwh = availableKwh + injectedKwh;
+    // Additional energy injected across all planned charging stops (multi-hop corridor)
+    double totalInjectedKwh = 0.0;
+    for (final stop in smartRoute.chargingStops) {
+      totalInjectedKwh += stop.energyAddedKwh;
+    }
+    final double totalEffectiveKwh = availableKwh + totalInjectedKwh;
 
     // Sub-score 1: Battery Margin Score mb = max(0, (SoCavail - Eroute)/SoCavail)
     final double mb = totalEffectiveKwh <= 0
@@ -59,9 +58,10 @@ class RangeAnxietyService {
         : math.min(1.0, effectiveRangeKm / routeDistanceKm);
 
     // Sub-score 3: Charger Accessibility Score mc = min(1, nstations / nrequired) * chargerFactor
-    final double chargerFactor = _chargerFactor(recommendedStop);
+    final double chargerFactor = _averageChargerFactor(smartRoute.chargingStops);
     final int nStations = smartRoute.chargingStops.length;
-    final int nRequired = routeEnergyDemandKwh > availableKwh ? 1 : 0;
+    // Calculate required number of charging stops based on trip energy demand
+    final int nRequired = math.max(0, (routeEnergyDemandKwh / math.max(1.0, availableKwh * 0.75)).ceil() - 1);
     final double stationRatio = nRequired == 0
         ? 1.0
         : math.min(1.0, nStations / nRequired);
@@ -72,14 +72,15 @@ class RangeAnxietyService {
     final int score = (compositeRai * 100).round().clamp(0, 100);
 
     // Safety margin buffer
-    final safetyMargin = recommendedStop == null ? 1.25 : 1.15;
+    final safetyMargin = smartRoute.chargingStops.isEmpty ? 1.25 : 1.15;
     final requiredDistanceKm = routeDistanceKm * safetyMargin;
-    final bufferKm = estimatedRangeKm - requiredDistanceKm;
+    final bufferKm = effectiveRangeKm - requiredDistanceKm;
 
     final (label, summary) = _statusFor(
       score: score,
       bufferKm: bufferKm,
-      stop: recommendedStop,
+      stops: smartRoute.chargingStops,
+      elevationGainM: smartRoute.totalElevationGainM,
     );
 
     return RangeAnxietyReport(
@@ -93,6 +94,9 @@ class RangeAnxietyService {
       chargerFactor: chargerFactor,
       safetyMargin: safetyMargin,
       recommendedStop: recommendedStop,
+      chargingStops: smartRoute.chargingStops,
+      totalElevationGainM: smartRoute.totalElevationGainM,
+      elevationEnergyPenaltyKwh: smartRoute.elevationEnergyPenaltyKwh,
     );
   }
 
@@ -112,56 +116,81 @@ class RangeAnxietyService {
     return totalMeters / 1000.0;
   }
 
-  double _chargerFactor(ChargingStop? stop) {
-    if (stop == null) return 0.55;
+  double _averageChargerFactor(List<ChargingStop> stops) {
+    if (stops.isEmpty) return 0.55;
 
-    final charger = stop.charger;
-    final availabilityScore = switch (charger.slots) {
-      <= 0 => 0.45,
-      1 => 0.72,
-      2 => 0.85,
-      _ => 1.0,
-    };
-    final detourScore = (1.0 - (stop.distanceFromRouteKm / 20.0)).clamp(0.55, 1.0);
-    final powerScore = charger.powerKw == null
-        ? 0.75
-        : (charger.powerKw! / 120.0).clamp(0.55, 1.0);
+    double totalFactor = 0.0;
+    for (final stop in stops) {
+      final charger = stop.charger;
+      final availabilityScore = switch (charger.slots) {
+        <= 0 => 0.45,
+        1 => 0.72,
+        2 => 0.85,
+        _ => 1.0,
+      };
+      final detourScore = (1.0 - (stop.distanceFromRouteKm / 20.0)).clamp(0.55, 1.0);
+      final powerScore = charger.powerKw == null
+          ? 0.75
+          : (charger.powerKw! / 120.0).clamp(0.55, 1.0);
 
-    return ((availabilityScore * 0.50) +
-            (detourScore * 0.30) +
-            (powerScore * 0.20))
-        .clamp(0.55, 1.0);
+      final factor = ((availabilityScore * 0.50) +
+              (detourScore * 0.30) +
+              (powerScore * 0.20))
+          .clamp(0.55, 1.0);
+      totalFactor += factor;
+    }
+
+    return totalFactor / stops.length;
   }
 
-  // Exact 70 / 40 thresholds specified in Section IV and Abstract
   (String, String) _statusFor({
     required int score,
     required double bufferKm,
-    required ChargingStop? stop,
+    required List<ChargingStop> stops,
+    required double elevationGainM,
   }) {
+    final elevNote = elevationGainM > 300
+        ? ' Includes +${elevationGainM.toStringAsFixed(0)}m elevation climb.'
+        : '';
+
     if (score >= 70) {
-      return (
-        'Safe trip',
-        bufferKm >= 0
-            ? 'You should be able to complete this route without range anxiety.'
-            : 'Charging is available along the corridor to ensure high confidence.',
-      );
+      if (stops.isEmpty) {
+        return (
+          'Safe trip',
+          'You can complete this route comfortably on your current charge.$elevNote',
+        );
+      } else if (stops.length == 1) {
+        return (
+          'Safe trip (1 Stop)',
+          'Route is fully secured with 1 planned charging stop (~${stops.first.chargingTimeMinutes.toStringAsFixed(0)} min charge).$elevNote',
+        );
+      } else {
+        return (
+          'Safe trip (${stops.length} Stops)',
+          'Corridor planned with ${stops.length} consecutive charging stops to prevent battery depletion.$elevNote',
+        );
+      }
     }
 
     if (score >= 40) {
-      return (
-        'Charge recommended',
-        stop == null
-            ? 'Your battery is usable, but this trip would feel safer with a planned charging stop.'
-            : 'A charging stop has been planned to keep battery levels within a safe buffer.',
-      );
+      if (stops.isEmpty) {
+        return (
+          'Charge recommended',
+          'Battery margin is tight for this distance.$elevNote A charging stop along the corridor is advised.',
+        );
+      } else {
+        return (
+          'Charge recommended',
+          '${stops.length} charging stops identified. Monitor battery levels, especially on steep ascents.$elevNote',
+        );
+      }
     }
 
     return (
       'High risk',
-      stop == null
-          ? 'This trip is at high risk of depletion with no accessible charging backup.'
-          : 'Your current battery is critically tight for this route. Charge before departure.',
+      stops.isEmpty
+          ? 'Route distance exceeds current range.$elevNote No accessible corridor chargers found before battery depletion.'
+          : 'High risk of battery exhaustion before reaching planned stops.$elevNote Charge vehicle before starting this trip.',
     );
   }
 }

@@ -424,22 +424,56 @@ class _MapScreenState extends State<MapScreen> {
                 'Trip ${report.routeDistanceKm.toStringAsFixed(0)} km',
               ),
               _metricChip('Buffer ${report.bufferKm.toStringAsFixed(0)} km'),
+              if (report.totalElevationGainM > 100)
+                _metricChip('Ascent +${report.totalElevationGainM.toStringAsFixed(0)}m'),
+              if (report.chargingStops.length > 1)
+                _metricChip('${report.chargingStops.length} Corridor Stops'),
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            stop == null
-                ? 'No strong on-route backup charger was found for this trip.'
-                : 'Best backup charger: ${stop.charger.name} '
-                    '(${stop.distanceFromRouteKm.toStringAsFixed(1)} km off route)',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _onPanel,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
+          if (report.chargingStops.isEmpty)
+            Text(
+              'No charging stops required for this route.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _onPanel,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (report.chargingStops.length == 1 && stop != null)
+            Text(
+              'Stop 1: ${stop.charger.name} '
+              '(${stop.distanceFromRouteKm.toStringAsFixed(1)} km detour • ~${stop.chargingTimeMinutes.toStringAsFixed(0)} min charge)',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _onPanel,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final s in report.chargingStops)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(
+                      'Stop ${s.stopOrder}: ${s.charger.name} (SoC ${s.arrivalSocPercent.toStringAsFixed(0)}% → ${s.targetSocPercent.toStringAsFixed(0)}%, ~${s.chargingTimeMinutes.toStringAsFixed(0)} min charge)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _onPanel,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
         ],
       ),
     );
@@ -1510,7 +1544,7 @@ class _MapScreenState extends State<MapScreen> {
   String _chargerMeta(Charger charger) {
     final stop = _chargingStopFor(charger);
     if (stop != null) {
-      return '${stop.distanceFromRouteKm.toStringAsFixed(1)} km from route';
+      return 'Stop ${stop.stopOrder} • ${stop.distanceFromRouteKm.toStringAsFixed(1)} km detour • ~${stop.chargingTimeMinutes.toStringAsFixed(0)}m charge';
     }
 
     if (_chargerMode == 'route' && _activeRoute != null) {
