@@ -20,8 +20,11 @@ class CommunityPage extends StatefulWidget {
 }
 
 class _CommunityPageState extends State<CommunityPage> {
+  static final DateFormat _feedDateFormat = DateFormat('MMM d, y - h:mm a');
+
   final TextEditingController _controller = TextEditingController();
   final NewsApiService _newsApiService = NewsApiService();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _postsStream;
   File? _image;
   Uint8List? _imageBytes;
   late Future<List<NewsModel>> _newsFuture;
@@ -29,6 +32,11 @@ class _CommunityPageState extends State<CommunityPage> {
   @override
   void initState() {
     super.initState();
+    _postsStream =
+        FirebaseFirestore.instance
+            .collection('posts')
+            .orderBy('createdAt', descending: true)
+            .snapshots();
     _newsFuture = _newsApiService.fetchLatest(limit: 8);
   }
 
@@ -106,38 +114,41 @@ class _CommunityPageState extends State<CommunityPage> {
     _controller.clear();
     _image = null;
     _imageBytes = null;
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _refreshNews() async {
-    final future = _newsApiService.fetchLatest(limit: 8);
+    final future = _newsApiService.fetchLatest(limit: 8, forceRefresh: true);
     setState(() {
       _newsFuture = future;
     });
     await future;
   }
 
-  Widget _buildPost(DocumentSnapshot doc) {
+  Widget _buildPost(DocumentSnapshot<Map<String, dynamic>> doc) {
     final palette = context.evayPalette;
     final cs = Theme.of(context).colorScheme;
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() ?? const <String, dynamic>{};
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
     final content = (data['content'] ?? '').toString();
-    final likesCount = (data['likesCount'] ?? 0);
+    final likesCount = (data['likesCount'] as num?)?.toInt() ?? 0;
 
     final likedBy =
-        (data['likedBy'] is List) ? List<String>.from(data['likedBy']) : [];
+        (data['likedBy'] is List)
+            ? List<String>.from(data['likedBy'] as List)
+            : const <String>[];
 
     final hasLiked = userId != null && likedBy.contains(userId);
 
     final images =
         (data['images'] is List)
-            ? List<Map<String, dynamic>>.from(data['images'])
-            : [];
+            ? List<Map<String, dynamic>>.from(data['images'] as List)
+            : const <Map<String, dynamic>>[];
 
     final isOwner = userId == data['userId'];
     final createdAt = _toDateTime(data['createdAt']);
+    final userAvatar = (data['userAvatar'] ?? '').toString();
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
@@ -158,17 +169,12 @@ class _CommunityPageState extends State<CommunityPage> {
               children: [
                 CircleAvatar(
                   backgroundImage:
-                      data['userAvatar'] != ""
-                          ? NetworkImage(data['userAvatar'])
-                          : null,
-                  child:
-                      data['userAvatar'] == ""
-                          ? const Icon(Icons.person)
-                          : null,
+                      userAvatar.isNotEmpty ? NetworkImage(userAvatar) : null,
+                  child: userAvatar.isEmpty ? const Icon(Icons.person) : null,
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  data['userName'] ?? "User",
+                  (data['userName'] ?? "User").toString(),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 8),
@@ -199,7 +205,7 @@ class _CommunityPageState extends State<CommunityPage> {
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: Image.network(
-                images[0]['url'],
+                images[0]['url'].toString(),
                 width: double.infinity,
                 height: 250,
                 fit: BoxFit.cover,
@@ -242,7 +248,7 @@ class _CommunityPageState extends State<CommunityPage> {
                   onPressed: () {
                     showModalBottomSheet(
                       context: context,
-                      isScrollControlled: true, // IMPORTANT
+                      isScrollControlled: true,
                       backgroundColor: Colors.transparent,
                       builder:
                           (_) => DraggableScrollableSheet(
@@ -283,7 +289,9 @@ class _CommunityPageState extends State<CommunityPage> {
         children: [
           if ((news.imageUrl ?? '').isNotEmpty)
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: Image.network(
                 news.imageUrl!,
                 width: double.infinity,
@@ -347,7 +355,7 @@ class _CommunityPageState extends State<CommunityPage> {
     );
   }
 
-  DateTime? _toDateTime(dynamic value) {
+  static DateTime? _toDateTime(dynamic value) {
     if (value is Timestamp) {
       return value.toDate();
     }
@@ -358,7 +366,7 @@ class _CommunityPageState extends State<CommunityPage> {
   }
 
   String _formatTimestamp(DateTime dateTime) {
-    return DateFormat('MMM d, y - h:mm a').format(dateTime.toLocal());
+    return _feedDateFormat.format(dateTime.toLocal());
   }
 
   @override
@@ -411,12 +419,8 @@ class _CommunityPageState extends State<CommunityPage> {
                 ),
               ),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream:
-                    FirebaseFirestore.instance
-                        .collection('posts')
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _postsStream,
                 builder: (context, postSnapshot) {
                   if (!postSnapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
@@ -426,32 +430,19 @@ class _CommunityPageState extends State<CommunityPage> {
                     future: _newsFuture,
                     builder: (context, newsSnapshot) {
                       final docs = postSnapshot.data!.docs;
-                      final news = newsSnapshot.data ?? <NewsModel>[];
+                      final news = newsSnapshot.data ?? const <NewsModel>[];
                       final feedItems =
-                          <Map<String, dynamic>>[
-                            ...docs.map(
-                              (doc) => <String, dynamic>{
-                                'type': 'post',
-                                'createdAt':
-                                    _toDateTime(
-                                      (doc.data() as Map<String, dynamic>)['createdAt'],
-                                    ) ??
+                          <(String type, DateTime createdAt, Object data)>[
+                            for (final doc in docs)
+                              (
+                                'post',
+                                _toDateTime(doc.data()['createdAt']) ??
                                     DateTime.fromMillisecondsSinceEpoch(0),
-                                'data': doc,
-                              },
-                            ),
-                            ...news.map(
-                              (item) => <String, dynamic>{
-                                'type': 'news',
-                                'createdAt': item.publishedAt,
-                                'data': item,
-                              },
-                            ),
-                          ]..sort(
-                            (a, b) => (b['createdAt'] as DateTime).compareTo(
-                              a['createdAt'] as DateTime,
-                            ),
-                          );
+                                doc,
+                              ),
+                            for (final item in news)
+                              ('news', item.publishedAt, item),
+                          ]..sort((a, b) => b.$2.compareTo(a.$2));
 
                       return RefreshIndicator(
                         onRefresh: _refreshNews,
@@ -460,10 +451,12 @@ class _CommunityPageState extends State<CommunityPage> {
                           itemCount: feedItems.length,
                           itemBuilder: (_, i) {
                             final item = feedItems[i];
-                            if (item['type'] == 'news') {
-                              return _buildNewsCard(item['data'] as NewsModel);
+                            if (item.$1 == 'news') {
+                              return _buildNewsCard(item.$3 as NewsModel);
                             }
-                            return _buildPost(item['data'] as DocumentSnapshot);
+                            return _buildPost(
+                              item.$3 as DocumentSnapshot<Map<String, dynamic>>,
+                            );
                           },
                         ),
                       );
@@ -494,7 +487,22 @@ class CommentSheet extends StatefulWidget {
 }
 
 class _CommentSheetState extends State<CommentSheet> {
+  static final DateFormat _commentDateFormat = DateFormat('MMM d - h:mm a');
+
   final TextEditingController controller = TextEditingController();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _commentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsStream =
+        FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.postId)
+            .collection('comments')
+            .orderBy('createdAt', descending: true)
+            .snapshots();
+  }
 
   @override
   void dispose() {
@@ -502,7 +510,7 @@ class _CommentSheetState extends State<CommentSheet> {
     super.dispose();
   }
 
-  DateTime? _toDateTime(dynamic value) {
+  static DateTime? _toDateTime(dynamic value) {
     if (value is Timestamp) {
       return value.toDate();
     }
@@ -519,7 +527,7 @@ class _CommentSheetState extends State<CommentSheet> {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -532,9 +540,7 @@ class _CommentSheetState extends State<CommentSheet> {
             height: 5,
             width: 40,
             decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).dividerColor.withValues(alpha: 0.3),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(10),
             ),
           ),
@@ -548,14 +554,8 @@ class _CommentSheetState extends State<CommentSheet> {
 
           /// COMMENTS LIST
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  FirebaseFirestore.instance
-                      .collection('posts')
-                      .doc(widget.postId)
-                      .collection('comments')
-                      .orderBy('createdAt', descending: true)
-                      .snapshots(),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _commentsStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -567,7 +567,7 @@ class _CommentSheetState extends State<CommentSheet> {
                   controller: widget.scrollController,
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
+                    final data = docs[i].data();
                     final commentTime = _toDateTime(data['createdAt']);
                     final isOwner = currentUser?.uid == data['userId'];
                     final avatarUrl = (data['userAvatar'] ?? '').toString();
@@ -575,7 +575,9 @@ class _CommentSheetState extends State<CommentSheet> {
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundImage:
-                            avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                            avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
                         child:
                             avatarUrl.isEmpty
                                 ? const Icon(Icons.person, size: 18)
@@ -586,14 +588,14 @@ class _CommentSheetState extends State<CommentSheet> {
                           Expanded(
                             child: Text(
                               (data['userName'] ?? 'User').toString(),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           if (commentTime != null)
                             Text(
-                              DateFormat('MMM d - h:mm a').format(
-                                commentTime.toLocal(),
-                              ),
+                              _commentDateFormat.format(commentTime.toLocal()),
                               style: Theme.of(context).textTheme.labelSmall,
                             ),
                         ],
@@ -606,8 +608,7 @@ class _CommentSheetState extends State<CommentSheet> {
                           isOwner
                               ? IconButton(
                                 icon: const Icon(Icons.delete_outline),
-                                onPressed:
-                                    () => docs[i].reference.delete(),
+                                onPressed: () => docs[i].reference.delete(),
                               )
                               : null,
                     );

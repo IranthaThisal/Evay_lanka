@@ -29,7 +29,7 @@ class ChargingStop {
 }
 
 class SmartRoute {
-  const SmartRoute({
+  SmartRoute({
     required this.origin,
     required this.destination,
     required this.routePoints,
@@ -37,13 +37,16 @@ class SmartRoute {
     required this.distanceText,
     required this.durationText,
     required this.chargingStops,
+    this.totalDistanceKm = 0.0,
     this.totalElevationGainM = 0.0,
     this.totalElevationLossM = 0.0,
     this.arrivalBatteryPercent = 0.0,
     this.totalChargingTimeMinutes = 0.0,
     this.totalEnergyConsumedKwh = 0.0,
     this.elevationEnergyPenaltyKwh = 0.0,
-  });
+  }) : _stopsByChargerId = {
+         for (final stop in chargingStops) stop.charger.id: stop,
+       };
 
   final LatLng origin;
   final LatLng destination;
@@ -52,6 +55,7 @@ class SmartRoute {
   final String distanceText;
   final String durationText;
   final List<ChargingStop> chargingStops;
+  final double totalDistanceKm;
   final double totalElevationGainM;
   final double totalElevationLossM;
   final double arrivalBatteryPercent;
@@ -59,6 +63,11 @@ class SmartRoute {
   final double totalEnergyConsumedKwh;
   final double elevationEnergyPenaltyKwh;
 
+  final Map<String, ChargingStop> _stopsByChargerId;
+
   bool get hasChargingStops => chargingStops.isNotEmpty;
   int get stopsCount => chargingStops.length;
+
+  /// O(1) lookup for whether a charger is a planned stop along this route.
+  ChargingStop? stopForCharger(String chargerId) => _stopsByChargerId[chargerId];
 }

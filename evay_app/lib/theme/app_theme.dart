@@ -112,7 +112,13 @@ class AppTheme {
   static const _lightSeed = Color(0xFF7FD4A3);
   static const _darkSeed = Color(0xFF72C5F8);
 
-  static ThemeData light() {
+  static final ThemeData _lightTheme = _createLightTheme();
+  static final ThemeData _darkTheme = _createDarkTheme();
+
+  static ThemeData light() => _lightTheme;
+  static ThemeData dark() => _darkTheme;
+
+  static ThemeData _createLightTheme() {
     final scheme = ColorScheme.fromSeed(
       seedColor: _lightSeed,
       brightness: Brightness.light,
@@ -147,7 +153,7 @@ class AppTheme {
     );
   }
 
-  static ThemeData dark() {
+  static ThemeData _createDarkTheme() {
     final scheme = ColorScheme.fromSeed(
       seedColor: _darkSeed,
       brightness: Brightness.dark,

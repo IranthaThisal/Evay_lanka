@@ -30,6 +30,11 @@ class _BookingScreenState extends State<BookingScreen> {
   int? _recommendedDurationMins;
   int? _recommendedStepMins;
 
+  // Cached streams & availability map to avoid recreating Firestore listeners on setState
+  late Stream<List<Map<String, dynamic>>> _waitlistStream;
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _bookingsStream;
+  Map<DateTime, int> _latestAvailabilityMap = const {};
+
   static const int _slotStepMins = 30;
   static const int _openHour = 8;
   static const int _closeHour = 20;
@@ -42,21 +47,43 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
+    final user = FirebaseAuth.instance.currentUser;
+    _waitlistStream =
+        user == null
+            ? const Stream.empty()
+            : _bookingService.watchUserWaitlist(user.uid);
+    _bookingsStream = _createBookingsStreamForDay(_day);
     _loadUserProfileAndCalculateRecommendation();
     // Automatic Expired Slot Recycling on screen entry
     _bookingService.recycleExpiredSlots(chargerId: widget.charger.id);
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _createBookingsStreamForDay(
+    DateTime day,
+  ) {
+    final d0 = _startOfDay(day);
+    final d1 = d0.add(const Duration(days: 1));
+
+    return FirebaseFirestore.instance
+        .collection('bookings')
+        .where('chargerId', isEqualTo: widget.charger.id)
+        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(d0))
+        .where('startTime', isLessThan: Timestamp.fromDate(d1))
+        .snapshots();
   }
 
   Future<void> _loadUserProfileAndCalculateRecommendation() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        final doc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
         final data = doc.data() ?? {};
-        final cap = (data['batteryKwh'] as num?)?.toDouble() ??
+        final cap =
+            (data['batteryKwh'] as num?)?.toDouble() ??
             (data['batteryCapacityKwh'] as num?)?.toDouble();
         final pct = (data['batteryPercent'] as num?)?.toDouble();
 
@@ -111,33 +138,21 @@ class _BookingScreenState extends State<BookingScreen> {
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year, now.month + 6, 0),
     );
-    if (picked != null) {
+    if (picked != null && _startOfDay(picked) != _startOfDay(_day)) {
       setState(() {
         _day = picked;
         _selectedStart = null;
+        _bookingsStream = _createBookingsStreamForDay(picked);
       });
     }
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _bookingsForDay() {
-    final d0 = _startOfDay(_day);
-    final d1 = d0.add(const Duration(days: 1));
-
-    return FirebaseFirestore.instance
-        .collection('bookings')
-        .where('chargerId', isEqualTo: widget.charger.id)
-        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(d0))
-        .where('startTime', isLessThan: Timestamp.fromDate(d1))
-        .snapshots();
-  }
-
   bool _overlaps(
     DateTime slotStart,
-    int durationMins,
+    DateTime slotEnd,
     DateTime bookedStart,
     DateTime bookedEnd,
   ) {
-    final slotEnd = slotStart.add(Duration(minutes: durationMins));
     return slotStart.isBefore(bookedEnd) && slotEnd.isAfter(bookedStart);
   }
 
@@ -222,22 +237,23 @@ class _BookingScreenState extends State<BookingScreen> {
     if (isWaitlisted) {
       final leave = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Leave Waitlist?'),
-          content: Text(
-            'You are currently queued for ${_fmtTime(slot)}. Do you want to cancel your alert?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Leave Waitlist?'),
+              content: Text(
+                'You are currently queued for ${_fmtTime(slot)}. Do you want to cancel your alert?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Leave Queue'),
+                ),
+              ],
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Leave Queue'),
-            ),
-          ],
-        ),
       );
 
       if (leave == true) {
@@ -248,7 +264,9 @@ class _BookingScreenState extends State<BookingScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Removed from waitlist for ${_fmtTime(slot)}.')),
+            SnackBar(
+              content: Text('Removed from waitlist for ${_fmtTime(slot)}.'),
+            ),
           );
         }
       }
@@ -257,29 +275,30 @@ class _BookingScreenState extends State<BookingScreen> {
 
     final join = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: const [
-            Icon(Icons.queue, color: Color(0xFF16A34A)),
-            SizedBox(width: 8),
-            Text('Smart Waitlist'),
-          ],
-        ),
-        content: Text(
-          'Slot at ${_fmtTime(slot)} is currently full.\n\nJoin the Smart Waitlist? Evay Lanka will immediately alert you when a booking is cancelled or expired slots are recycled.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.queue, color: Color(0xFF16A34A)),
+                SizedBox(width: 8),
+                Text('Smart Waitlist'),
+              ],
+            ),
+            content: Text(
+              'Slot at ${_fmtTime(slot)} is currently full.\n\nJoin the Smart Waitlist? Evay Lanka will immediately alert you when a booking is cancelled or expired slots are recycled.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.notifications_active),
+                label: const Text('Join Waitlist'),
+              ),
+            ],
           ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.notifications_active),
-            label: const Text('Join Waitlist'),
-          ),
-        ],
-      ),
     );
 
     if (join == true) {
@@ -308,7 +327,6 @@ class _BookingScreenState extends State<BookingScreen> {
     final slots = _buildSlots(_day);
     final cs = Theme.of(context).colorScheme;
     final l10n = context.l10n;
-    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('bookASlot')), centerTitle: true),
@@ -320,29 +338,7 @@ class _BookingScreenState extends State<BookingScreen> {
           onPressed:
               _selectedStart == null || _submittingBooking
                   ? null
-                  : () async {
-                    final snap = await _bookingsForDay().first;
-                    final bookings = snap.docs.map((d) => d.data()).toList();
-
-                    final availabilityMap = <DateTime, int>{};
-
-                    for (final slot in slots) {
-                      int overlaps = 0;
-
-                      for (final b in bookings) {
-                        final bStart = (b['startTime'] as Timestamp).toDate();
-                        final bEnd = (b['endTime'] as Timestamp).toDate();
-
-                        if (_overlaps(slot, _durationMins, bStart, bEnd)) {
-                          overlaps++;
-                        }
-                      }
-
-                      availabilityMap[slot] = widget.charger.slots - overlaps;
-                    }
-
-                    await _confirmBooking(availabilityMap);
-                  },
+                  : () => _confirmBooking(_latestAvailabilityMap),
           style: ElevatedButton.styleFrom(
             backgroundColor: cs.primary,
             foregroundColor: Colors.white,
@@ -368,7 +364,7 @@ class _BookingScreenState extends State<BookingScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /// 🔥 CHARGER CARD
+            /// CHARGER CARD
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -399,7 +395,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             const SizedBox(height: 12),
 
-            /// ⚡ INTELLIGENT SLOT DURATION RECOMMENDATION CARD
+            /// INTELLIGENT SLOT DURATION RECOMMENDATION CARD
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -487,7 +483,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             const SizedBox(height: 12),
 
-            /// 🔥 DATE + DURATION
+            /// DATE + DURATION
             Column(
               children: [
                 GestureDetector(
@@ -564,16 +560,13 @@ class _BookingScreenState extends State<BookingScreen> {
 
             const SizedBox(height: 8),
 
-            /// 🔥 SMART WAITLIST & GRID
+            /// SMART WAITLIST & GRID
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream:
-                    user == null
-                        ? const Stream.empty()
-                        : _bookingService.watchUserWaitlist(user.uid),
+                stream: _waitlistStream,
                 builder: (context, waitlistSnap) {
-                  final waitlistEntries = waitlistSnap.data ?? [];
-                  final waitlistedKeys = {
+                  final waitlistEntries = waitlistSnap.data ?? const [];
+                  final waitlistedKeys = <String>{
                     for (final w in waitlistEntries)
                       if (w['status'] == 'waiting' && w['slotKey'] != null)
                         w['slotKey'].toString(),
@@ -585,37 +578,48 @@ class _BookingScreenState extends State<BookingScreen> {
                     if (w['status'] == 'available' &&
                         w['chargerId'] == widget.charger.id &&
                         w['slotStartTime'] != null) {
-                      freedSlotTime = (w['slotStartTime'] as Timestamp).toDate();
+                      freedSlotTime =
+                          (w['slotStartTime'] as Timestamp).toDate();
                       break;
                     }
                   }
 
                   return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _bookingsForDay(),
+                    stream: _bookingsStream,
                     builder: (context, snap) {
                       if (!snap.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      final bookings =
-                          snap.data!.docs.map((d) => d.data()).toList();
+                      // Pre-extract booking time ranges once per snapshot
+                      final bookedRanges = <(DateTime, DateTime)>[];
+                      for (final doc in snap.data!.docs) {
+                        final data = doc.data();
+                        if (data['status'] == 'cancelled') continue;
+                        final bStart = (data['startTime'] as Timestamp?)?.toDate();
+                        final bEnd = (data['endTime'] as Timestamp?)?.toDate();
+                        if (bStart != null && bEnd != null) {
+                          bookedRanges.add((bStart, bEnd));
+                        }
+                      }
 
                       final availabilityMap = <DateTime, int>{};
+                      final slotDuration = Duration(minutes: _durationMins);
 
                       for (final slot in slots) {
+                        final slotEnd = slot.add(slotDuration);
                         int overlaps = 0;
 
-                        for (final b in bookings) {
-                          final bStart = (b['startTime'] as Timestamp).toDate();
-                          final bEnd = (b['endTime'] as Timestamp).toDate();
-
-                          if (_overlaps(slot, _durationMins, bStart, bEnd)) {
+                        for (var i = 0; i < bookedRanges.length; i++) {
+                          final range = bookedRanges[i];
+                          if (_overlaps(slot, slotEnd, range.$1, range.$2)) {
                             overlaps++;
                           }
                         }
 
                         availabilityMap[slot] = widget.charger.slots - overlaps;
                       }
+                      _latestAvailabilityMap = availabilityMap;
 
                       return Column(
                         children: [
@@ -679,11 +683,12 @@ class _BookingScreenState extends State<BookingScreen> {
                                   selected: _selectedStart == slot,
                                   availability: availability,
                                   isWaitlisted: isWaitlisted,
-                                  onTap: () => _handleSlotTap(
-                                    slot: slot,
-                                    availability: availability,
-                                    waitlistedKeys: waitlistedKeys,
-                                  ),
+                                  onTap:
+                                      () => _handleSlotTap(
+                                        slot: slot,
+                                        availability: availability,
+                                        waitlistedKeys: waitlistedKeys,
+                                      ),
                                 );
                               },
                             ),
@@ -704,7 +709,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 }
 
-/// 🔥 SLOT TILE WITH WAITLIST SUPPORT
+/// SLOT TILE WITH WAITLIST SUPPORT
 class _SlotTile extends StatelessWidget {
   const _SlotTile({
     required this.label,

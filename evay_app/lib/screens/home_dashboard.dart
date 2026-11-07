@@ -27,8 +27,19 @@ class HomeDashboard extends StatefulWidget {
 class _HomeDashboardState extends State<HomeDashboard> {
   double? _draftBatteryPercent;
   bool _savingBatteryPercent = false;
+  String? _cachedUid;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _userDocStream;
 
   User? get _user => FirebaseAuth.instance.currentUser;
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _getUserDocStream(String uid) {
+    if (_cachedUid != uid || _userDocStream == null) {
+      _cachedUid = uid;
+      _userDocStream =
+          FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+    }
+    return _userDocStream!;
+  }
 
   Future<void> _saveBatteryPercent(double value) async {
     final user = _user;
@@ -59,11 +70,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return Scaffold(
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream:
-              FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .snapshots(),
+          stream: _getUserDocStream(user.uid),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
@@ -121,7 +128,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
-                ),  
+                ),
                 const SizedBox(height: 12),
                 Center(
                   child: Image.asset(
@@ -222,7 +229,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                _TipBanner(
+                const _TipBanner(
                   title: 'Vehicle checklist',
                   body:
                       'Keep tyre pressure, battery level, and your nearest charger in check before heading out.',

@@ -43,11 +43,26 @@ class NewsApiService {
     'jenner',
   ];
 
+  static List<NewsModel>? _cachedItems;
+  static DateTime? _lastFetchTime;
+  static const Duration _cacheTtl = Duration(minutes: 5);
+
   bool get isConfigured => _apiKey.trim().isNotEmpty;
 
-  Future<List<NewsModel>> fetchLatest({int limit = 10}) async {
+  Future<List<NewsModel>> fetchLatest({
+    int limit = 10,
+    bool forceRefresh = false,
+  }) async {
     if (!isConfigured) {
-      return <NewsModel>[];
+      return const <NewsModel>[];
+    }
+
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _cachedItems != null &&
+        _lastFetchTime != null &&
+        now.difference(_lastFetchTime!) < _cacheTtl) {
+      return _cachedItems!;
     }
 
     final uri = Uri.parse(_baseUrl).replace(
@@ -63,13 +78,12 @@ class NewsApiService {
     );
 
     try {
-      final response = await http.get(
-        uri,
-        headers: <String, String>{'X-Api-Key': _apiKey},
-      );
+      final response = await http
+          .get(uri, headers: <String, String>{'X-Api-Key': _apiKey})
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
-        return <NewsModel>[];
+        return _cachedItems ?? const <NewsModel>[];
       }
 
       final body = jsonDecode(response.body);
@@ -111,14 +125,16 @@ class NewsApiService {
             imageUrl: article['urlToImage']?.toString(),
             publishedAt:
                 DateTime.tryParse((article['publishedAt'] ?? '').toString()) ??
-                DateTime.now(),
+                now,
           ),
         );
       }
 
+      _cachedItems = items;
+      _lastFetchTime = now;
       return items;
     } catch (_) {
-      return <NewsModel>[];
+      return _cachedItems ?? const <NewsModel>[];
     }
   }
 

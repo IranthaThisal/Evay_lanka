@@ -1,0 +1,23 @@
+# Miscellaneous
+*.log
+*.rar
+.DS_Store
+
+# IntelliJ / Android Studio
+.idea/caches/
+.idea/deviceManager.xml
+.idea/workspace.xml
+.idea/shelf/
+
+# VS Code
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+
+# Flutter / Dart build artifacts
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/

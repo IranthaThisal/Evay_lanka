@@ -10,6 +10,10 @@ class ChargeNetService {
   static final Uri _endpoint = Uri.parse(
     'https://api.chargenet.lk:13100/ChargerHandler.asmx/ShowAllChargePointData',
   );
+  static final RegExp _powerRegex = RegExp(
+    r'(\d+(?:\.\d+)?)\s*kW',
+    caseSensitive: false,
+  );
 
   final http.Client _client;
 
@@ -70,17 +74,14 @@ class ChargeNetService {
             .split(',')
             .map((part) => part.trim())
             .where((part) => part.isNotEmpty)
-            .toList();
+            .toList(growable: false);
     if (parts.isEmpty) return 'ChargeNet';
 
     return parts.length >= 2 ? parts[parts.length - 2] : parts.last;
   }
 
   double? _powerFrom({required String type, required String name}) {
-    final match = RegExp(
-      r'(\d+(?:\.\d+)?)\s*kW',
-      caseSensitive: false,
-    ).firstMatch(name);
+    final match = _powerRegex.firstMatch(name);
     if (match != null) return double.tryParse(match.group(1)!);
 
     return switch (type.toUpperCase()) {

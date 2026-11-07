@@ -14,9 +14,27 @@ class BookingsScreen extends StatefulWidget {
 }
 
 class _BookingsScreenState extends State<BookingsScreen> {
-  final df = DateFormat('EEE, MMM d • HH:mm');
+  static final DateFormat _dateTimeFormat = DateFormat('EEE, MMM d • HH:mm');
+  static final DateFormat _timeOnlyFormat = DateFormat('HH:mm');
 
-  DateTime _asDate(dynamic v) {
+  late final Stream<User?> _authStream =
+      FirebaseAuth.instance.authStateChanges();
+  String? _cachedUid;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bookingsStream;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _streamForUser(String uid) {
+    if (_cachedUid != uid || _bookingsStream == null) {
+      _cachedUid = uid;
+      _bookingsStream =
+          FirebaseFirestore.instance
+              .collection('bookings')
+              .where('userId', isEqualTo: uid)
+              .snapshots();
+    }
+    return _bookingsStream!;
+  }
+
+  static DateTime _asDate(dynamic v) {
     if (v is Timestamp) return v.toDate();
     if (v is DateTime) return v;
     return DateTime.fromMillisecondsSinceEpoch(0);
@@ -25,7 +43,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: _authStream,
       builder: (context, authSnap) {
         if (authSnap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -36,16 +54,13 @@ class _BookingsScreenState extends State<BookingsScreen> {
           return Center(child: Text(context.l10n.t('pleaseLoginBookings')));
         }
 
-        // ✅ IMPORTANT: No orderBy here → avoids composite index requirement
-        final query = FirebaseFirestore.instance
-            .collection('bookings')
-            .where('userId', isEqualTo: user.uid);
-
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: query.snapshots(),
+          stream: _streamForUser(user.uid),
           builder: (context, snap) {
             if (snap.hasError) {
-              return Center(child: Text(context.l10n.errorWithMessage(snap.error!)));
+              return Center(
+                child: Text(context.l10n.errorWithMessage(snap.error!)),
+              );
             }
             if (!snap.hasData) {
               return const Center(child: CircularProgressIndicator());
@@ -62,26 +77,32 @@ class _BookingsScreenState extends State<BookingsScreen> {
               );
             }
 
-            // Client-side sort by startTime (newest first)
-            final sorted = [...docs];
-            sorted.sort((a, b) {
-              final aStart = _asDate(a.data()['startTime']);
-              final bStart = _asDate(b.data()['startTime']);
-              return bStart.compareTo(aStart);
-            });
+            // Pre-extract timestamps once and sort (newest first)
+            final decorated = <
+              (
+                QueryDocumentSnapshot<Map<String, dynamic>> doc,
+                DateTime start,
+                DateTime end,
+              )
+            >[
+              for (final d in docs)
+                (
+                  d,
+                  _asDate(d.data()['startTime']),
+                  _asDate(d.data()['endTime']),
+                ),
+            ]..sort((a, b) => b.$2.compareTo(a.$2));
 
             final now = DateTime.now();
 
             final upcoming = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
             final history = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-            for (final d in sorted) {
-              final data = d.data();
-              final end = _asDate(data['endTime']);
-              if (end.isAfter(now)) {
-                upcoming.add(d);
+            for (final item in decorated) {
+              if (item.$3.isAfter(now)) {
+                upcoming.add(item.$1);
               } else {
-                history.add(d);
+                history.add(item.$1);
               }
             }
 
@@ -131,12 +152,14 @@ class _BookingsScreenState extends State<BookingsScreen> {
                         children: [
                           _BookingsList(
                             docs: upcoming,
-                            df: df,
+                            df: _dateTimeFormat,
+                            timeFormat: _timeOnlyFormat,
                             emptyText: context.l10n.t('noUpcomingBookings'),
                           ),
                           _BookingsList(
                             docs: history,
-                            df: df,
+                            df: _dateTimeFormat,
+                            timeFormat: _timeOnlyFormat,
                             emptyText: context.l10n.t('noBookingHistory'),
                           ),
                         ],
@@ -157,14 +180,16 @@ class _BookingsList extends StatelessWidget {
   const _BookingsList({
     required this.docs,
     required this.df,
+    required this.timeFormat,
     required this.emptyText,
   });
 
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
   final DateFormat df;
+  final DateFormat timeFormat;
   final String emptyText;
 
-  DateTime _asDate(dynamic v) {
+  static DateTime _asDate(dynamic v) {
     if (v is Timestamp) return v.toDate();
     if (v is DateTime) return v;
     return DateTime.fromMillisecondsSinceEpoch(0);
@@ -200,8 +225,7 @@ class _BookingsList extends StatelessWidget {
         final start = _asDate(data['startTime']);
         final end = _asDate(data['endTime']);
 
-        final timeText =
-            '${df.format(start)} → ${DateFormat('HH:mm').format(end)}';
+        final timeText = '${df.format(start)} → ${timeFormat.format(end)}';
 
         final statusColor =
             status == 'booked'

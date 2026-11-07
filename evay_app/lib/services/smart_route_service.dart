@@ -10,12 +10,17 @@ import 'route_service.dart';
 
 /// Topographical elevation anchor point representing key relief features in Sri Lanka.
 class ElevationAnchor {
-  const ElevationAnchor(this.lat, this.lng, this.elevationM, this.radiusKm);
+  const ElevationAnchor(this.lat, this.lng, this.elevationM, this.radiusKm)
+      : invTwoSigmaSq = -1.0 / (2.0 * radiusKm * radiusKm),
+        // Cutoff at weight = 1e-4 => -ln(1e-4) * 2 * sigma^2 = 18.42068 * sigma^2
+        cutoffDistSqKm = 18.420680743952367 * radiusKm * radiusKm;
 
   final double lat;
   final double lng;
   final double elevationM;
   final double radiusKm;
+  final double invTwoSigmaSq;
+  final double cutoffDistSqKm;
 }
 
 /// Sri Lanka Topographical & Elevation Modeling Service.
@@ -24,6 +29,10 @@ class ElevationAnchor {
 /// Calculates gravitational potential energy penalties and regenerative braking recovery.
 class SriLankaElevationModel {
   const SriLankaElevationModel();
+
+  // Equirectangular scale factors at Sri Lanka's mean latitude (~7.87° N)
+  static const double _kmPerDegLat = 110.574;
+  static const double _kmPerDegLng = 110.250;
 
   // Reference topography anchors across Sri Lanka's geographical zones
   static const List<ElevationAnchor> anchors = [
@@ -65,24 +74,21 @@ class SriLankaElevationModel {
   ];
 
   /// Interpolates the topographical elevation in meters at a given coordinate.
+  /// Uses fast planar squared-distance with radial cutoff to avoid trig/sqrt overhead.
   double getElevation(LatLng point) {
     double totalWeight = 0.0;
     double weightedElevation = 0.0;
+    final lat = point.latitude;
+    final lng = point.longitude;
 
-    for (final anchor in anchors) {
-      final distanceKm = Geolocator.distanceBetween(
-            point.latitude,
-            point.longitude,
-            anchor.lat,
-            anchor.lng,
-          ) /
-          1000.0;
+    for (var i = 0; i < anchors.length; i++) {
+      final anchor = anchors[i];
+      final dLatKm = (lat - anchor.lat) * _kmPerDegLat;
+      final dLngKm = (lng - anchor.lng) * _kmPerDegLng;
+      final distSqKm = (dLatKm * dLatKm) + (dLngKm * dLngKm);
 
-      // Gaussian radial basis weighting
-      final sigma = anchor.radiusKm;
-      final weight = math.exp(-(distanceKm * distanceKm) / (2.0 * sigma * sigma));
-
-      if (weight > 1e-4) {
+      if (distSqKm < anchor.cutoffDistSqKm) {
+        final weight = math.exp(distSqKm * anchor.invTwoSigmaSq);
         weightedElevation += weight * anchor.elevationM;
         totalWeight += weight;
       }
@@ -96,17 +102,24 @@ class SriLankaElevationModel {
   }
 
   /// Calculates the cumulative ascent (gain) and descent (loss) in meters along route waypoints.
-  (double gainM, double lossM) computeGainAndLoss(List<LatLng> points) {
+  (double gainM, double lossM) computeGainAndLoss(
+    List<LatLng> points, {
+    List<double>? precomputedElevations,
+  }) {
     if (points.length < 2) return (0.0, 0.0);
 
     double totalGain = 0.0;
     double totalLoss = 0.0;
-    double prevElev = getElevation(points.first);
+    double prevElev = precomputedElevations != null
+        ? precomputedElevations.first
+        : getElevation(points.first);
 
     // Sample every 2nd or 3rd waypoint for elevation profile smoothing
     final step = math.max(1, (points.length / 100).ceil());
     for (var i = step; i < points.length; i += step) {
-      final currElev = getElevation(points[i]);
+      final currElev = precomputedElevations != null
+          ? precomputedElevations[i]
+          : getElevation(points[i]);
       final delta = currElev - prevElev;
       if (delta > 0) {
         totalGain += delta;
@@ -117,7 +130,9 @@ class SriLankaElevationModel {
     }
 
     // Include last waypoint
-    final lastElev = getElevation(points.last);
+    final lastElev = precomputedElevations != null
+        ? precomputedElevations.last
+        : getElevation(points.last);
     final finalDelta = lastElev - prevElev;
     if (finalDelta > 0) {
       totalGain += finalDelta;
@@ -137,20 +152,21 @@ class SriLankaElevationModel {
     double driveEfficiency = 0.88,
     double regenEfficiency = 0.65,
   }) {
+    if (deltaElevationM == 0.0) return 0.0;
+
     const g = 9.80665; // m/s^2
     const joulesToKwh = 1.0 / 3600000.0;
 
-    final potentialEnergyKwh = (vehicleMassKg * g * deltaElevationM.abs()) * joulesToKwh;
+    final potentialEnergyKwh =
+        (vehicleMassKg * g * deltaElevationM.abs()) * joulesToKwh;
 
     if (deltaElevationM > 0) {
       // Uphill ascent penalty: extra motor energy needed to gain gravitational potential
       return potentialEnergyKwh / driveEfficiency;
-    } else if (deltaElevationM < 0) {
+    } else {
       // Downhill descent recovery: kinetic/potential conversion through regenerative braking
       return -potentialEnergyKwh * regenEfficiency;
     }
-
-    return 0.0;
   }
 }
 
@@ -164,7 +180,7 @@ class SpatialChargerIndex {
       final cellX = (charger.lat / cellSizeDeg).floor();
       final cellY = (charger.lng / cellSizeDeg).floor();
       final key = _hashKey(cellX, cellY);
-      _grid.putIfAbsent(key, () => []).add(charger);
+      (_grid[key] ??= <Charger>[]).add(charger);
     }
   }
 
@@ -184,17 +200,26 @@ class SpatialChargerIndex {
     required double marginKm,
   }) {
     final marginLat = marginKm / 111.0;
-    final midLatRad = ((bounds.southwest.latitude + bounds.northeast.latitude) / 2.0) * math.pi / 180.0;
-    final marginLng = marginKm / (111.0 * math.cos(midLatRad).abs().clamp(0.2, 1.0));
+    final midLatRad =
+        ((bounds.southwest.latitude + bounds.northeast.latitude) / 2.0) *
+        math.pi /
+        180.0;
+    final marginLng =
+        marginKm / (111.0 * math.cos(midLatRad).abs().clamp(0.2, 1.0));
 
     final minLat = bounds.southwest.latitude - marginLat;
     final maxLat = bounds.northeast.latitude + marginLat;
     final minLng = bounds.southwest.longitude - marginLng;
     final maxLng = bounds.northeast.longitude + marginLng;
 
-    return chargers.where((c) {
-      return c.lat >= minLat && c.lat <= maxLat && c.lng >= minLng && c.lng <= maxLng;
-    }).toList();
+    return [
+      for (final c in chargers)
+        if (c.lat >= minLat &&
+            c.lat <= maxLat &&
+            c.lng >= minLng &&
+            c.lng <= maxLng)
+          c,
+    ];
   }
 
   /// Queries chargers within radiusKm in O(1) average time by scanning local grid neighborhood.
@@ -259,7 +284,24 @@ class SmartRouteService {
       destination: destination,
     );
 
-    final (gainM, lossM) = _elevationModel.computeGainAndLoss(route.points);
+    final points = route.points;
+    final n = points.length;
+    final cumulativeDistances = List<double>.filled(n, 0.0);
+    final elevations = List<double>.filled(n, 0.0);
+
+    if (n > 0) {
+      elevations[0] = _elevationModel.getElevation(points[0]);
+      for (var i = 1; i < n; i++) {
+        cumulativeDistances[i] =
+            cumulativeDistances[i - 1] + _distanceBetween(points[i - 1], points[i]);
+        elevations[i] = _elevationModel.getElevation(points[i]);
+      }
+    }
+
+    final (gainM, lossM) = _elevationModel.computeGainAndLoss(
+      points,
+      precomputedElevations: elevations,
+    );
     final elevationEnergyPenaltyKwh = _elevationModel.computeElevationEnergyDelta(
       deltaElevationM: gainM - (lossM * 0.70),
       vehicleMassKg: conditions.totalVehicleMassKg,
@@ -267,7 +309,7 @@ class SmartRouteService {
 
     final stops = recommendChargingStops(
       origin: origin,
-      routePoints: route.points,
+      routePoints: points,
       routeBounds: route.bounds,
       chargers: chargers,
       maxDistanceFromRouteKm: maxDistanceFromRouteKm,
@@ -280,6 +322,8 @@ class SmartRouteService {
       climateFactor: climateFactor,
       reserveThresholdPercent: reserveThresholdPercent,
       targetChargePercent: targetChargePercent,
+      precomputedDistances: cumulativeDistances,
+      precomputedElevations: elevations,
     );
 
     double totalChargingTime = 0.0;
@@ -290,11 +334,12 @@ class SmartRouteService {
     return SmartRoute(
       origin: origin,
       destination: destination,
-      routePoints: route.points,
+      routePoints: points,
       bounds: route.bounds,
       distanceText: route.distanceText,
       durationText: route.durationText,
       chargingStops: stops,
+      totalDistanceKm: cumulativeDistances.isEmpty ? 0.0 : cumulativeDistances.last,
       totalElevationGainM: gainM,
       totalElevationLossM: lossM,
       totalChargingTimeMinutes: totalChargingTime,
@@ -320,6 +365,8 @@ class SmartRouteService {
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
+    List<double>? precomputedDistances,
+    List<double>? precomputedElevations,
   }) {
     if (routePoints.isEmpty || chargers.isEmpty) return const [];
 
@@ -338,30 +385,46 @@ class SmartRouteService {
 
     // EV Specifications
     final capacity = batteryCapacityKwh ?? 55.0; // Default ~55 kWh battery
-    final ratedEfficiencyKwhPerKm = (efficiencyKmPerKwh != null && efficiencyKmPerKwh > 0)
-        ? (1.0 / efficiencyKmPerKwh)
-        : 0.18; // Default ~18 kWh/100km
+    final ratedEfficiencyKwhPerKm =
+        (efficiencyKmPerKwh != null && efficiencyKmPerKwh > 0)
+            ? (1.0 / efficiencyKmPerKwh)
+            : 0.18; // Default ~18 kWh/100km
 
     // Environmental consumption factor: tropical climate + driver mode + rain + payload
-    final totalEnvironmentalFactor = climateFactor * conditions.compositeEnvironmentalMultiplier;
+    final totalEnvironmentalFactor =
+        climateFactor * conditions.compositeEnvironmentalMultiplier;
+    final effectiveRateKwhPerKm =
+        ratedEfficiencyKwhPerKm * totalEnvironmentalFactor;
+    final totalMassKg = conditions.totalVehicleMassKg;
 
-    double currentSocKwh = capacity * ((batteryPercent ?? 70.0).clamp(5.0, 100.0) / 100.0);
+    double currentSocKwh =
+        capacity * ((batteryPercent ?? 70.0).clamp(5.0, 100.0) / 100.0);
     double currentSocPercent = (currentSocKwh / capacity) * 100.0;
     final reserveFloorKwh = capacity * (reserveThresholdPercent / 100.0);
 
     final stops = <ChargingStop>[];
     final visitedChargerIds = <String>{};
 
-    // Pre-calculate cumulative waypoint distances and elevations
+    // Reuse pre-calculated cumulative waypoint distances and elevations if available
     final n = routePoints.length;
-    final cumulativeDistances = List<double>.filled(n, 0.0);
-    final elevations = List<double>.filled(n, 0.0);
+    final List<double> cumulativeDistances;
+    final List<double> elevations;
 
-    elevations[0] = _elevationModel.getElevation(routePoints[0]);
-    for (var i = 1; i < n; i++) {
-      final segKm = _distanceBetween(routePoints[i - 1], routePoints[i]);
-      cumulativeDistances[i] = cumulativeDistances[i - 1] + segKm;
-      elevations[i] = _elevationModel.getElevation(routePoints[i]);
+    if (precomputedDistances != null &&
+        precomputedElevations != null &&
+        precomputedDistances.length == n &&
+        precomputedElevations.length == n) {
+      cumulativeDistances = precomputedDistances;
+      elevations = precomputedElevations;
+    } else {
+      cumulativeDistances = List<double>.filled(n, 0.0);
+      elevations = List<double>.filled(n, 0.0);
+      elevations[0] = _elevationModel.getElevation(routePoints[0]);
+      for (var i = 1; i < n; i++) {
+        final segKm = _distanceBetween(routePoints[i - 1], routePoints[i]);
+        cumulativeDistances[i] = cumulativeDistances[i - 1] + segKm;
+        elevations[i] = _elevationModel.getElevation(routePoints[i]);
+      }
     }
 
     final totalRouteDistanceKm = cumulativeDistances.last;
@@ -373,21 +436,21 @@ class SmartRouteService {
       final deltaElevationM = elevations[i] - elevations[i - 1];
 
       // Base energy consumption (environmental scaled) + Sri Lanka topography energy factor
-      final baseEnergyKwh = segDistanceKm * ratedEfficiencyKwhPerKm * totalEnvironmentalFactor;
+      final baseEnergyKwh = segDistanceKm * effectiveRateKwhPerKm;
       final elevationEnergyKwh = _elevationModel.computeElevationEnergyDelta(
         deltaElevationM: deltaElevationM,
-        vehicleMassKg: conditions.totalVehicleMassKg,
+        vehicleMassKg: totalMassKg,
       );
       final segmentEnergyKwh = baseEnergyKwh + elevationEnergyKwh;
 
       currentSocKwh -= segmentEnergyKwh;
       currentSocPercent = (currentSocKwh / capacity) * 100.0;
 
-      // Project next step to prevent stranding below critical 12% reserve
+      // Project next step to prevent stranding below critical reserve
       final isNearReserve = currentSocPercent <= reserveThresholdPercent;
 
-      if ((isNearReserve && stops.length < maxStops) ||
-          (currentSocKwh < reserveFloorKwh && stops.length < maxStops)) {
+      if ((isNearReserve || currentSocKwh < reserveFloorKwh) &&
+          stops.length < maxStops) {
         // Battery has dropped into the 15-20% window! Search for corridor charger
         // Look back over recent corridor waypoints (where SoC was still between 15% - 35%)
         final lookbackStart = math.max(lastStopWaypointIndex, i - 25);
@@ -395,8 +458,12 @@ class SmartRouteService {
 
         for (var j = i; j >= lookbackStart; j--) {
           final pt = routePoints[j];
-          final nearby = spatialIndex.queryNearbyChargers(pt, maxDistanceFromRouteKm);
-          for (final c in nearby) {
+          final nearby = spatialIndex.queryNearbyChargers(
+            pt,
+            maxDistanceFromRouteKm,
+          );
+          for (var k = 0; k < nearby.length; k++) {
+            final c = nearby[k];
             if (visitedChargerIds.contains(c.id)) continue;
             final distToWp = _distanceBetween(pt, LatLng(c.lat, c.lng));
             if (distToWp <= maxDistanceFromRouteKm) {
@@ -442,11 +509,13 @@ class SmartRouteService {
           if (bestCharger != null) {
             final arrivalSoc = currentSocPercent.clamp(8.0, 35.0);
             final targetSoc = targetChargePercent.clamp(60.0, 90.0);
-            final energyNeededKwh = ((targetSoc - arrivalSoc) / 100.0) * capacity;
+            final energyNeededKwh =
+                ((targetSoc - arrivalSoc) / 100.0) * capacity;
             final chargerPower = (bestCharger.powerKw ?? 30.0).clamp(10.0, 150.0);
-            
+
             // Standard DC Fast Charger taper curve efficiency (eta ~0.90)
-            final chargingTimeMinutes = (energyNeededKwh / (chargerPower * 0.90)) * 60.0;
+            final chargingTimeMinutes =
+                (energyNeededKwh / (chargerPower * 0.90)) * 60.0;
 
             final stop = ChargingStop(
               charger: bestCharger,

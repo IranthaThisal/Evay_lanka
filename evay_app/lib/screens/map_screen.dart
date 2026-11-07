@@ -10,16 +10,17 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../l10n/app_localizations.dart';
 import '../models/charger.dart';
 import '../models/charger_checkin.dart';
-import '../services/checkin_service.dart';
-import 'checkin_dialog.dart';
 import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
 import '../services/charger_service.dart';
+import '../services/checkin_service.dart';
 import '../services/range_anxiety_service.dart';
 import '../services/route_service.dart';
 import '../services/smart_route_service.dart';
 import '../theme/app_theme.dart';
+import '../ui/osm_map_view.dart';
 import 'booking_screen.dart';
+import 'checkin_dialog.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -76,6 +77,9 @@ class _MapScreenState extends State<MapScreen> {
   final SmartRouteService _smartRouteService = SmartRouteService();
   final RangeAnxietyService _rangeAnxietyService = const RangeAnxietyService();
   late final Stream<List<Charger>> _chargersStream;
+  final ValueNotifier<double> _panelHeightNotifier = ValueNotifier<double>(
+    _minChargerPanelHeight,
+  );
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   final TextEditingController _batteryCapacityController =
@@ -87,7 +91,7 @@ class _MapScreenState extends State<MapScreen> {
     text: '6',
   );
 
-  GoogleMapController? _controller;
+  OsmMapController? _controller;
   LatLng? _currentLocation;
   LatLng? _destinationLocation;
   RouteDetails? _activeRoute;
@@ -98,7 +102,6 @@ class _MapScreenState extends State<MapScreen> {
   bool _buildingRoute = false;
   bool _loadingVehicleProfile = false;
   bool _showTripPlanner = false;
-  double _chargerPanelHeight = _minChargerPanelHeight;
   bool _availableOnly = false;
   double _minPowerKw = 0;
   String _chargerMode = 'nearby';
@@ -116,11 +119,13 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _panelHeightNotifier.dispose();
     _searchController.dispose();
     _destinationController.dispose();
     _batteryCapacityController.dispose();
     _batteryPercentController.dispose();
     _efficiencyController.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -151,25 +156,43 @@ class _MapScreenState extends State<MapScreen> {
 
             final chargers = snapshot.data!;
             final visibleChargers = _visibleChargers(chargers);
-            final featuredChargers = visibleChargers.take(6).toList();
+            final featuredChargers =
+                visibleChargers.take(6).toList(growable: false);
+            final markers = _buildMarkers(visibleChargers);
+            final circles = _buildCircles();
+            final polylines = _buildPolylines();
+            final recommendedIds = {
+              for (final c in visibleChargers)
+                if (_isRecommendedChargingStop(c)) c.id,
+            };
 
             return Stack(
               children: [
-                GoogleMap(
-                  initialCameraPosition: _initial,
-                  myLocationEnabled: _currentLocation != null,
-                  myLocationButtonEnabled: false,
-                  compassEnabled: false,
-                  zoomControlsEnabled: false,
-                  mapToolbarEnabled: false,
-                  onMapCreated: (controller) => _controller = controller,
-                  markers: _buildMarkers(visibleChargers),
-                  circles: _buildCircles(),
-                  polylines: _buildPolylines(),
+                RepaintBoundary(
+                  child: OsmMapView(
+                    initialCameraPosition: _initial,
+                    myLocationEnabled: _currentLocation != null,
+                    isDarkMode: !_isLight,
+                    onMapCreated: (controller) => _controller = controller,
+                    markers: markers,
+                    circles: circles,
+                    polylines: polylines,
+                    recommendedChargerIds: recommendedIds,
+                  ),
                 ),
                 _buildTopControls(chargers),
-                _buildMapActions(),
-                _buildBottomPanel(featuredChargers),
+                ValueListenableBuilder<double>(
+                  valueListenable: _panelHeightNotifier,
+                  builder: (context, panelHeight, _) {
+                    return _buildMapActions(panelHeight);
+                  },
+                ),
+                ValueListenableBuilder<double>(
+                  valueListenable: _panelHeightNotifier,
+                  builder: (context, panelHeight, _) {
+                    return _buildBottomPanel(featuredChargers, panelHeight);
+                  },
+                ),
               ],
             );
           },
@@ -179,7 +202,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildTopControls(List<Charger> chargers) {
-    final connectors = _allConnectorTypes(chargers);
     final l10n = context.l10n;
 
     return Align(
@@ -203,14 +225,22 @@ class _MapScreenState extends State<MapScreen> {
                         hintStyle: TextStyle(color: _onPanelMuted),
                         border: InputBorder.none,
                       ),
-                      onTap: () => setState(() => _showTripPlanner = true),
+                      onTap: () {
+                        if (!_showTripPlanner) {
+                          setState(() => _showTripPlanner = true);
+                        }
+                      },
                       onChanged: (value) {
-                        setState(() => _query = value.trim().toLowerCase());
+                        final next = value.trim().toLowerCase();
+                        if (_query != next) {
+                          setState(() => _query = next);
+                        }
                       },
                     ),
                   ),
                   IconButton(
-                    onPressed: () => _openFilterSheet(connectors),
+                    onPressed:
+                        () => _openFilterSheet(_allConnectorTypes(chargers)),
                     icon: Icon(Icons.tune, color: _onPanel),
                   ),
                 ],
@@ -306,7 +336,10 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _panelSoft,
                     borderRadius: BorderRadius.circular(12),
@@ -317,13 +350,18 @@ class _MapScreenState extends State<MapScreen> {
                       value: _drivingMode,
                       isDense: true,
                       dropdownColor: _panel,
-                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
-                      items: DrivingMode.values.map((mode) {
-                        return DropdownMenuItem(
-                          value: mode,
-                          child: Text('${mode.label} Mode'),
-                        );
-                      }).toList(),
+                      style: TextStyle(
+                        color: _onPanel,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      items:
+                          DrivingMode.values.map((mode) {
+                            return DropdownMenuItem(
+                              value: mode,
+                              child: Text('${mode.label} Mode'),
+                            );
+                          }).toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _drivingMode = val);
                       },
@@ -334,7 +372,10 @@ class _MapScreenState extends State<MapScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _panelSoft,
                     borderRadius: BorderRadius.circular(12),
@@ -345,15 +386,22 @@ class _MapScreenState extends State<MapScreen> {
                       value: _weatherCondition,
                       isDense: true,
                       dropdownColor: _panel,
-                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
-                      items: WeatherCondition.values.map((weather) {
-                        return DropdownMenuItem(
-                          value: weather,
-                          child: Text(weather.label),
-                        );
-                      }).toList(),
+                      style: TextStyle(
+                        color: _onPanel,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      items:
+                          WeatherCondition.values.map((weather) {
+                            return DropdownMenuItem(
+                              value: weather,
+                              child: Text(weather.label),
+                            );
+                          }).toList(),
                       onChanged: (val) {
-                        if (val != null) setState(() => _weatherCondition = val);
+                        if (val != null) {
+                          setState(() => _weatherCondition = val);
+                        }
                       },
                     ),
                   ),
@@ -366,7 +414,10 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _panelSoft,
                     borderRadius: BorderRadius.circular(12),
@@ -377,13 +428,20 @@ class _MapScreenState extends State<MapScreen> {
                       value: _passengerCount,
                       isDense: true,
                       dropdownColor: _panel,
-                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
-                      items: [1, 2, 3, 4, 5].map((cnt) {
-                        return DropdownMenuItem(
-                          value: cnt,
-                          child: Text(cnt == 1 ? '1 Person' : '$cnt Passengers'),
-                        );
-                      }).toList(),
+                      style: TextStyle(
+                        color: _onPanel,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      items:
+                          const [1, 2, 3, 4, 5].map((cnt) {
+                            return DropdownMenuItem(
+                              value: cnt,
+                              child: Text(
+                                cnt == 1 ? '1 Person' : '$cnt Passengers',
+                              ),
+                            );
+                          }).toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _passengerCount = val);
                       },
@@ -394,7 +452,10 @@ class _MapScreenState extends State<MapScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _panelSoft,
                     borderRadius: BorderRadius.circular(12),
@@ -405,13 +466,22 @@ class _MapScreenState extends State<MapScreen> {
                       value: _cargoWeightKg,
                       isDense: true,
                       dropdownColor: _panel,
-                      style: TextStyle(color: _onPanel, fontSize: 13, fontWeight: FontWeight.w600),
-                      items: const [0.0, 30.0, 60.0, 100.0, 150.0].map((cargo) {
-                        return DropdownMenuItem(
-                          value: cargo,
-                          child: Text(cargo == 0 ? 'No Cargo' : '+${cargo.toInt()}kg Cargo'),
-                        );
-                      }).toList(),
+                      style: TextStyle(
+                        color: _onPanel,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      items:
+                          const [0.0, 30.0, 60.0, 100.0, 150.0].map((cargo) {
+                            return DropdownMenuItem(
+                              value: cargo,
+                              child: Text(
+                                cargo == 0
+                                    ? 'No Cargo'
+                                    : '+${cargo.toInt()}kg Cargo',
+                              ),
+                            );
+                          }).toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _cargoWeightKg = val);
                       },
@@ -562,13 +632,19 @@ class _MapScreenState extends State<MapScreen> {
               _metricChip('Buffer ${report.bufferKm.toStringAsFixed(0)} km'),
               _metricChip('Safety ${report.safetyMargin.toStringAsFixed(2)}x'),
               if (report.totalElevationGainM > 100)
-                _metricChip('Ascent +${report.totalElevationGainM.toStringAsFixed(0)}m'),
+                _metricChip(
+                  'Ascent +${report.totalElevationGainM.toStringAsFixed(0)}m',
+                ),
               if (report.conditions.weather != WeatherCondition.dry)
-                _metricChip('${report.conditions.weather.label} (+${((report.conditions.weather.rollingResistanceMultiplier - 1.0) * 100).toStringAsFixed(0)}%)'),
+                _metricChip(
+                  '${report.conditions.weather.label} (+${((report.conditions.weather.rollingResistanceMultiplier - 1.0) * 100).toStringAsFixed(0)}%)',
+                ),
               if (report.conditions.drivingMode != DrivingMode.normal)
                 _metricChip('${report.conditions.drivingMode.label} Mode'),
               if (report.conditions.addedPayloadMassKg > 0)
-                _metricChip('+${report.conditions.addedPayloadMassKg.toStringAsFixed(0)}kg Payload'),
+                _metricChip(
+                  '+${report.conditions.addedPayloadMassKg.toStringAsFixed(0)}kg Payload',
+                ),
               if (report.chargingStops.length > 1)
                 _metricChip('${report.chargingStops.length} Corridor Stops'),
             ],
@@ -578,14 +654,16 @@ class _MapScreenState extends State<MapScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: pnr.isSafeToReturn
-                    ? const Color(0xFF16A34A).withValues(alpha: 0.12)
-                    : const Color(0xFFDC2626).withValues(alpha: 0.12),
+                color:
+                    pnr.isSafeToReturn
+                        ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                        : const Color(0xFFDC2626).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: pnr.isSafeToReturn
-                      ? const Color(0xFF16A34A).withValues(alpha: 0.3)
-                      : const Color(0xFFDC2626).withValues(alpha: 0.3),
+                  color:
+                      pnr.isSafeToReturn
+                          ? const Color(0xFF16A34A).withValues(alpha: 0.3)
+                          : const Color(0xFFDC2626).withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
@@ -595,9 +673,10 @@ class _MapScreenState extends State<MapScreen> {
                     pnr.isSafeToReturn
                         ? Icons.replay_circle_filled_rounded
                         : Icons.warning_amber_rounded,
-                    color: pnr.isSafeToReturn
-                        ? const Color(0xFF16A34A)
-                        : const Color(0xFFDC2626),
+                    color:
+                        pnr.isSafeToReturn
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFDC2626),
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -610,9 +689,10 @@ class _MapScreenState extends State<MapScreen> {
                               ? 'Round-Trip Return: Verified Safe'
                               : 'Point of No Return Alert (at ${pnr.pointOfNoReturnKmFromOrigin.toStringAsFixed(0)} km)',
                           style: TextStyle(
-                            color: pnr.isSafeToReturn
-                                ? const Color(0xFF16A34A)
-                                : const Color(0xFFDC2626),
+                            color:
+                                pnr.isSafeToReturn
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFDC2626),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -695,10 +775,8 @@ class _MapScreenState extends State<MapScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(24),
       onTap: () {
-        setState(() {
-          _chargerPanelHeight =
-              expanded ? _minChargerPanelHeight : _maxChargerPanelHeight;
-        });
+        _panelHeightNotifier.value =
+            expanded ? _minChargerPanelHeight : _maxChargerPanelHeight;
       },
       child: Container(
         width: double.infinity,
@@ -768,10 +846,10 @@ class _MapScreenState extends State<MapScreen> {
     return const Color(0xFFD84343);
   }
 
-  Widget _buildMapActions() {
+  Widget _buildMapActions(double chargerPanelHeight) {
     final topInset = _showTripPlanner ? 430.0 : 160.0;
     final bottomInset =
-        _chargerPanelHeight.clamp(
+        chargerPanelHeight.clamp(
           _collapsedChargerPanelHeight,
           _maxChargerPanelHeight,
         ) +
@@ -812,7 +890,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildBottomPanel(List<Charger> chargers) {
+  Widget _buildBottomPanel(List<Charger> chargers, double chargerPanelHeight) {
     final report = _activeRangeAnxiety;
     final title = switch (_chargerMode) {
       'route' => 'Charging Stops On Your Route',
@@ -821,36 +899,33 @@ class _MapScreenState extends State<MapScreen> {
     };
     final minHeight = _collapsedChargerPanelHeight;
     final maxHeight = _maxChargerPanelHeight;
-    final contentVisible = _chargerPanelHeight >= _detailChargerPanelThreshold;
+    final clampedHeight = chargerPanelHeight.clamp(minHeight, maxHeight);
+    final contentVisible = clampedHeight >= _detailChargerPanelThreshold;
 
     return Align(
       alignment: Alignment.bottomCenter,
       child: GestureDetector(
         onVerticalDragUpdate: (details) {
-          setState(() {
-            _chargerPanelHeight =
-                (_chargerPanelHeight - details.delta.dy)
-                    .clamp(minHeight, maxHeight)
-                    .toDouble();
-          });
+          _panelHeightNotifier.value =
+              (clampedHeight - details.delta.dy)
+                  .clamp(minHeight, maxHeight)
+                  .toDouble();
         },
         onVerticalDragEnd: (details) {
           final velocity = details.primaryVelocity ?? 0;
           final midpoint = (minHeight + maxHeight) / 2;
           final shouldExpand =
               velocity < -120 ||
-              (velocity.abs() <= 120 && _chargerPanelHeight >= midpoint);
-          setState(() {
-            _chargerPanelHeight = shouldExpand ? maxHeight : minHeight;
-          });
+              (velocity.abs() <= 120 && clampedHeight >= midpoint);
+          _panelHeightNotifier.value = shouldExpand ? maxHeight : minHeight;
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
-          height: _chargerPanelHeight.clamp(minHeight, maxHeight),
+          height: clampedHeight,
           decoration: BoxDecoration(
             color: _bg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
           child: Column(
@@ -859,10 +934,8 @@ class _MapScreenState extends State<MapScreen> {
               InkWell(
                 borderRadius: BorderRadius.circular(999),
                 onTap: () {
-                  setState(() {
-                    _chargerPanelHeight =
-                        contentVisible ? minHeight : maxHeight;
-                  });
+                  _panelHeightNotifier.value =
+                      contentVisible ? minHeight : maxHeight;
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1119,7 +1192,11 @@ class _MapScreenState extends State<MapScreen> {
   Widget _modeChip(String label, String value) {
     final selected = _chargerMode == value;
     return GestureDetector(
-      onTap: () => setState(() => _chargerMode = value),
+      onTap: () {
+        if (_chargerMode != value) {
+          setState(() => _chargerMode = value);
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1175,9 +1252,7 @@ class _MapScreenState extends State<MapScreen> {
       });
 
       if (animateCamera) {
-        await _controller?.animateCamera(
-          CameraUpdate.newLatLngZoom(location, 12.5),
-        );
+        await _controller?.animateToLatLngZoom(location, 12.5);
       }
     } catch (error) {
       if (!mounted) return;
@@ -1233,6 +1308,20 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<LatLng> _resolveDestinationCoordinates(String destinationText) async {
+    final osmResult = await _routeService.geocodeAddress(destinationText);
+    if (osmResult != null) {
+      return osmResult;
+    }
+
+    final locations = await locationFromAddress(destinationText);
+    if (locations.isEmpty) {
+      throw Exception('Destination was not found.');
+    }
+
+    return LatLng(locations.first.latitude, locations.first.longitude);
+  }
+
   Future<void> _planTrip(List<Charger> chargers) async {
     final destinationText = _destinationController.text.trim();
     if (destinationText.isEmpty) {
@@ -1272,17 +1361,9 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
-      final locations = await locationFromAddress(destinationText);
-      if (locations.isEmpty) {
-        throw Exception('Destination was not found.');
-      }
-
-      final destination = LatLng(
-        locations.first.latitude,
-        locations.first.longitude,
-      );
+      final destination = await _resolveDestinationCoordinates(destinationText);
       final reliabilityScores = await _checkInService.getReliabilityScores(
-        chargers.map((c) => c.id).toList(),
+        chargers.map((c) => c.id).toList(growable: false),
       );
       final smartRoute = await _smartRouteService.planFastestRouteWithChargers(
         origin: _currentLocation!,
@@ -1310,6 +1391,7 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       if (!mounted) return;
+      _panelHeightNotifier.value = _minChargerPanelHeight;
       setState(() {
         _destinationLocation = destination;
         _activeRoute = route;
@@ -1317,13 +1399,10 @@ class _MapScreenState extends State<MapScreen> {
         _activeRangeAnxiety = raiReport;
         _chargerMode = 'route';
         _showTripPlanner = true;
-        _chargerPanelHeight = _minChargerPanelHeight;
         _statusText = '${route.distanceText} - ${route.durationText}';
       });
 
-      await _controller?.animateCamera(
-        CameraUpdate.newLatLngBounds(route.bounds, 72),
-      );
+      await _controller?.animateToBounds(route.bounds, padding: 72);
     } catch (error) {
       if (!mounted) return;
       setState(
@@ -1355,6 +1434,7 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       if (!mounted) return;
+      _panelHeightNotifier.value = _minChargerPanelHeight;
       setState(() {
         _destinationLocation = LatLng(charger.lat, charger.lng);
         _activeRoute = route;
@@ -1362,13 +1442,10 @@ class _MapScreenState extends State<MapScreen> {
         _activeRangeAnxiety = null;
         _chargerMode = 'route';
         _showTripPlanner = false;
-        _chargerPanelHeight = _minChargerPanelHeight;
         _statusText = '${route.distanceText} - ${route.durationText}';
       });
 
-      await _controller?.animateCamera(
-        CameraUpdate.newLatLngBounds(route.bounds, 72),
-      );
+      await _controller?.animateToBounds(route.bounds, padding: 72);
     } catch (error) {
       if (!mounted) return;
       setState(
@@ -1382,6 +1459,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _clearRoute() {
+    _panelHeightNotifier.value = _minChargerPanelHeight;
     setState(() {
       _destinationController.clear();
       _destinationLocation = null;
@@ -1397,16 +1475,12 @@ class _MapScreenState extends State<MapScreen> {
 
   void _focusActiveContent() {
     if (_activeRoute != null) {
-      _controller?.animateCamera(
-        CameraUpdate.newLatLngBounds(_activeRoute!.bounds, 72),
-      );
+      _controller?.animateToBounds(_activeRoute!.bounds, padding: 72);
       return;
     }
 
     if (_currentLocation != null) {
-      _controller?.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentLocation!, 12.5),
-      );
+      _controller?.animateToLatLngZoom(_currentLocation!, 12.5);
     }
   }
 
@@ -1432,7 +1506,9 @@ class _MapScreenState extends State<MapScreen> {
                       children: [
                         Text(
                           charger.name,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                             color: _onPanel,
                           ),
@@ -1448,7 +1524,8 @@ class _MapScreenState extends State<MapScreen> {
                   StreamBuilder<ChargerReliabilitySummary>(
                     stream: _checkInService.watchReliability(charger.id),
                     builder: (context, snap) {
-                      final summary = snap.data ??
+                      final summary =
+                          snap.data ??
                           const ChargerReliabilitySummary(
                             score: 9.0,
                             totalCheckIns: 0,
@@ -1457,24 +1534,32 @@ class _MapScreenState extends State<MapScreen> {
                           );
 
                       final isDown = summary.isReportedDownRecently;
-                      final tone = isDown
-                          ? const Color(0xFFDC2626)
-                          : summary.isHighReliability
+                      final tone =
+                          isDown
+                              ? const Color(0xFFDC2626)
+                              : summary.isHighReliability
                               ? const Color(0xFF16A34A)
                               : const Color(0xFFD97706);
 
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: tone.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: tone.withValues(alpha: 0.35)),
+                          border: Border.all(
+                            color: tone.withValues(alpha: 0.35),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isDown ? Icons.warning_amber_rounded : Icons.star_rounded,
+                              isDown
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.star_rounded,
                               color: tone,
                               size: 16,
                             ),
@@ -1554,7 +1639,11 @@ class _MapScreenState extends State<MapScreen> {
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF16A34A),
-                        side: BorderSide(color: const Color(0xFF16A34A).withValues(alpha: 0.5)),
+                        side: BorderSide(
+                          color: const Color(
+                            0xFF16A34A,
+                          ).withValues(alpha: 0.5),
+                        ),
                       ),
                       icon: const Icon(Icons.how_to_reg, size: 18),
                       label: const Text('Check In'),
@@ -1573,9 +1662,12 @@ class _MapScreenState extends State<MapScreen> {
               ),
               const SizedBox(height: 8),
               StreamBuilder<List<ChargerCheckIn>>(
-                stream: _checkInService.watchRecentCheckIns(charger.id, limit: 2),
+                stream: _checkInService.watchRecentCheckIns(
+                  charger.id,
+                  limit: 2,
+                ),
                 builder: (context, snap) {
-                  final list = snap.data ?? [];
+                  final list = snap.data ?? const <ChargerCheckIn>[];
                   if (list.isEmpty) {
                     return Text(
                       'No recent driver reports. Be the first to check in!',
@@ -1595,11 +1687,13 @@ class _MapScreenState extends State<MapScreen> {
                                 c.outcome == CheckInOutcome.success
                                     ? Icons.check_circle
                                     : c.outcome == CheckInOutcome.couldNotCharge
-                                        ? Icons.error
-                                        : Icons.comment,
-                                color: c.outcome == CheckInOutcome.success
-                                    ? const Color(0xFF16A34A)
-                                    : c.outcome == CheckInOutcome.couldNotCharge
+                                    ? Icons.error
+                                    : Icons.comment,
+                                color:
+                                    c.outcome == CheckInOutcome.success
+                                        ? const Color(0xFF16A34A)
+                                        : c.outcome ==
+                                            CheckInOutcome.couldNotCharge
                                         ? const Color(0xFFDC2626)
                                         : const Color(0xFF0284C7),
                                 size: 15,
@@ -1610,7 +1704,10 @@ class _MapScreenState extends State<MapScreen> {
                                   '${c.userName} (${c.vehicleModel ?? 'EV'}): ${c.outcome == CheckInOutcome.couldNotCharge ? c.issue.label : (c.comment.isNotEmpty ? c.comment : 'Charged successfully')}',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11.5, color: _onPanel),
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: _onPanel,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1761,48 +1858,49 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   List<Charger> _visibleChargers(List<Charger> chargers) {
-    final filtered =
-        chargers.where((charger) {
-          final searchMatch =
-              _query.isEmpty ||
-              charger.name.toLowerCase().contains(_query) ||
-              charger.city.toLowerCase().contains(_query) ||
-              charger.connectorTypes.any(
-                (connector) => connector.toLowerCase().contains(_query),
-              );
-          if (!searchMatch) return false;
+    final smartRoute = _activeSmartRoute;
+    final scored = <(Charger, double)>[];
 
-          if (_availableOnly && charger.slots <= 0) return false;
-          if (_minPowerKw > 0 && (charger.powerKw ?? 0) < _minPowerKw) {
-            return false;
-          }
-          if (_selectedConnectors.isNotEmpty &&
-              !_selectedConnectors.any(charger.connectorTypes.contains)) {
-            return false;
-          }
+    for (final charger in chargers) {
+      final searchMatch =
+          _query.isEmpty ||
+          charger.name.toLowerCase().contains(_query) ||
+          charger.city.toLowerCase().contains(_query) ||
+          charger.connectorTypes.any(
+            (connector) => connector.toLowerCase().contains(_query),
+          );
+      if (!searchMatch) continue;
 
-          if (_chargerMode == 'route') {
-            final smartRoute = _activeSmartRoute;
-            if (smartRoute != null) {
-              return smartRoute.chargingStops.any(
-                (stop) => stop.charger.id == charger.id,
-              );
-            }
-            return _isAlongRoute(charger);
-          }
+      if (_availableOnly && charger.slots <= 0) continue;
+      if (_minPowerKw > 0 && (charger.powerKw ?? 0) < _minPowerKw) {
+        continue;
+      }
+      if (_selectedConnectors.isNotEmpty &&
+          !_selectedConnectors.any(charger.connectorTypes.contains)) {
+        continue;
+      }
 
-          return true;
-        }).toList();
+      if (_chargerMode == 'route') {
+        if (smartRoute != null) {
+          final stop = smartRoute.stopForCharger(charger.id);
+          if (stop == null) continue;
+          scored.add((charger, stop.distanceFromOriginKm));
+          continue;
+        } else {
+          final routeDist = _distanceFromRoute(charger);
+          if (routeDist > 15) continue;
+          scored.add((charger, routeDist));
+          continue;
+        }
+      }
 
-    filtered.sort(
-      (a, b) => _distanceForSorting(a).compareTo(_distanceForSorting(b)),
-    );
-
-    if (_chargerMode == 'all') {
-      return filtered;
+      scored.add((charger, _distanceForSorting(charger)));
     }
 
-    return filtered.take(20).toList();
+    scored.sort((a, b) => a.$2.compareTo(b.$2));
+
+    final limit = _chargerMode == 'all' ? scored.length : math.min(20, scored.length);
+    return [for (var i = 0; i < limit; i++) scored[i].$1];
   }
 
   Set<Marker> _buildMarkers(List<Charger> chargers) {
@@ -1910,24 +2008,12 @@ class _MapScreenState extends State<MapScreen> {
     return charger.city.isEmpty ? 'Charging station' : charger.city;
   }
 
-  bool _isAlongRoute(Charger charger) {
-    if (_activeRoute == null) return false;
-    return _distanceFromRoute(charger) <= 15;
-  }
-
   bool _isRecommendedChargingStop(Charger charger) {
     return _chargingStopFor(charger) != null;
   }
 
   ChargingStop? _chargingStopFor(Charger charger) {
-    final smartRoute = _activeSmartRoute;
-    if (smartRoute == null) return null;
-
-    for (final stop in smartRoute.chargingStops) {
-      if (stop.charger.id == charger.id) return stop;
-    }
-
-    return null;
+    return _activeSmartRoute?.stopForCharger(charger.id);
   }
 
   double _distanceForSorting(Charger charger) {

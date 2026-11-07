@@ -5,6 +5,10 @@ import '../models/charger_checkin.dart';
 class CheckInService {
   final _db = FirebaseFirestore.instance;
 
+  static final Map<String, double> _scoreCache = {};
+  static DateTime? _lastCacheTime;
+  static const Duration _cacheTtl = Duration(minutes: 2);
+
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection('charger_checkins');
 
@@ -12,6 +16,8 @@ class CheckInService {
   Future<void> submitCheckIn(ChargerCheckIn checkIn) async {
     final ref = checkIn.id.isEmpty ? _col.doc() : _col.doc(checkIn.id);
     await ref.set(checkIn.toMap());
+    // Invalidate cached score for this charger so next route uses fresh data
+    _scoreCache.remove(checkIn.chargerId);
   }
 
   /// Real-time stream of recent check-ins for a specific charger
@@ -27,14 +33,16 @@ class CheckInService {
         .map((snap) {
           return snap.docs
               .map((doc) => ChargerCheckIn.fromDoc(doc.id, doc.data()))
-              .toList();
+              .toList(growable: false);
         });
   }
 
   /// Real-time stream calculating the live LankaScore (0-10) and reliability metrics
   Stream<ChargerReliabilitySummary> watchReliability(String chargerId) {
     return watchRecentCheckIns(chargerId, limit: 12).map((checkIns) {
-      return calculateReliabilitySummary(checkIns);
+      final summary = calculateReliabilitySummary(checkIns);
+      _scoreCache[chargerId] = summary.score;
+      return summary;
     });
   }
 
@@ -74,7 +82,8 @@ class CheckInService {
     }
 
     final totalEvaluated = successes + failures;
-    double rawScore = totalEvaluated > 0 ? (successes / totalEvaluated) * 10.0 : 9.0;
+    double rawScore =
+        totalEvaluated > 0 ? (successes / totalEvaluated) * 10.0 : 9.0;
 
     // Penalty if an issue was reported within the last 4 hours
     if (lastIssueTime != null &&
@@ -83,7 +92,7 @@ class CheckInService {
     }
 
     return ChargerReliabilitySummary(
-      score: double.parse(rawScore.toStringAsFixed(1)),
+      score: (rawScore * 10).roundToDouble() / 10.0,
       totalCheckIns: checkIns.length,
       successCount: successes,
       failureCount: failures,
@@ -93,35 +102,55 @@ class CheckInService {
     );
   }
 
-  /// Batch fetches reliability scores for smart routing
+  /// Batch fetches reliability scores for smart routing with in-memory TTL caching
   Future<Map<String, double>> getReliabilityScores(
     List<String> chargerIds,
   ) async {
     final result = <String, double>{};
     if (chargerIds.isEmpty) return result;
 
+    final now = DateTime.now();
+    final cacheValid =
+        _lastCacheTime != null && now.difference(_lastCacheTime!) < _cacheTtl;
+
+    final uncachedIds = <String>[];
+    for (final id in chargerIds) {
+      final cached = cacheValid ? _scoreCache[id] : null;
+      if (cached != null) {
+        result[id] = cached;
+      } else {
+        uncachedIds.add(id);
+      }
+    }
+
+    if (uncachedIds.isEmpty) return result;
+
     try {
-      // Fetch recent 30 checkins to evaluate corridor stations
+      // Firestore whereIn supports up to 30 items per query
+      final queryIds = uncachedIds.take(30).toList(growable: false);
       final snap = await _col
-          .where('chargerId', whereIn: chargerIds.take(10).toList())
+          .where('chargerId', whereIn: queryIds)
           .orderBy('createdAt', descending: true)
-          .limit(40)
+          .limit(60)
           .get();
 
       final grouped = <String, List<ChargerCheckIn>>{};
       for (final doc in snap.docs) {
         final c = ChargerCheckIn.fromDoc(doc.id, doc.data());
-        grouped.putIfAbsent(c.chargerId, () => []).add(c);
+        (grouped[c.chargerId] ??= <ChargerCheckIn>[]).add(c);
       }
 
-      for (final id in chargerIds) {
-        final list = grouped[id] ?? [];
-        result[id] = calculateReliabilitySummary(list).score;
+      for (final id in uncachedIds) {
+        final list = grouped[id] ?? const <ChargerCheckIn>[];
+        final score = calculateReliabilitySummary(list).score;
+        result[id] = score;
+        _scoreCache[id] = score;
       }
+      _lastCacheTime = now;
     } catch (_) {
       // Default to 9.0 baseline if query limits or offline
-      for (final id in chargerIds) {
-        result[id] = 9.0;
+      for (final id in uncachedIds) {
+        result[id] = _scoreCache[id] ?? 9.0;
       }
     }
 

@@ -74,84 +74,77 @@ class _ChargeScreenState extends State<ChargeScreen>
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
           const SizedBox(height: 4),
-          AnimatedBuilder(
-            animation: _glowAnimation,
-            builder: (context, child) {
-              final t = _glowAnimation.value;
-              return SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Opacity(
-                      opacity: 0.18 + (t * 0.12),
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(
-                          sigmaX: 10 + (t * 8),
-                          sigmaY: 10 + (t * 8),
-                        ),
-                        child: Transform.scale(
-                          scale: 1.18 + (t * 0.08),
-                          child: ColorFiltered(
-                            colorFilter: ColorFilter.mode(
-                              palette.heroAccent,
-                              BlendMode.srcATop,
-                            ),
-                            child: Image.asset(
-                              _glowAssetPath,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.contain,
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              child: Image.asset(
+                _glowAssetPath,
+                width: 70,
+                height: 70,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.bolt_rounded,
+                    size: 40,
+                    color: palette.heroAccent,
+                  );
+                },
+              ),
+              builder: (context, child) {
+                final t = _glowAnimation.value;
+                return SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Opacity(
+                        opacity: 0.18 + (t * 0.12),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 10 + (t * 8),
+                            sigmaY: 10 + (t * 8),
+                          ),
+                          child: Transform.scale(
+                            scale: 1.18 + (t * 0.08),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.mode(
+                                palette.heroAccent,
+                                BlendMode.srcATop,
+                              ),
+                              child: child,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Opacity(
-                      opacity: 0.14 + (t * 0.10),
-                      child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(
-                          sigmaX: 6 + (t * 4),
-                          sigmaY: 6 + (t * 4),
-                        ),
-                        child: Transform.scale(
-                          scale: 1.08 + (t * 0.06),
-                          child: ColorFiltered(
-                            colorFilter: ColorFilter.mode(
-                              palette.heroAccent,
-                              BlendMode.srcATop,
-                            ),
-                            child: Image.asset(
-                              _glowAssetPath,
-                              width: 70,
-                              height: 70,
-                              fit: BoxFit.contain,
+                      Opacity(
+                        opacity: 0.14 + (t * 0.10),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 6 + (t * 4),
+                            sigmaY: 6 + (t * 4),
+                          ),
+                          child: Transform.scale(
+                            scale: 1.08 + (t * 0.06),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.mode(
+                                palette.heroAccent,
+                                BlendMode.srcATop,
+                              ),
+                              child: child,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Transform.scale(
-                      scale: 0.98 + (t * 0.04),
-                      child: Image.asset(
-                        _glowAssetPath,
-                        width: 70,
-                        height: 70,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            Icons.bolt_rounded,
-                            size: 40,
-                            color: palette.heroAccent,
-                          );
-                        },
+                      Transform.scale(
+                        scale: 0.98 + (t * 0.04),
+                        child: child,
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(height: 12),
           Text(
