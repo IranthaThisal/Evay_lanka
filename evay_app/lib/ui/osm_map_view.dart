@@ -207,6 +207,9 @@ class _OsmMapViewState extends State<OsmMapView>
     _animController.stop();
     _lastFocalPoint = details.localFocalPoint;
     _scaleStartZoom = _zoom;
+    if (_selectedMarkerId != null) {
+      setState(() => _selectedMarkerId = null);
+    }
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details, Size size) {
@@ -319,7 +322,7 @@ class _OsmMapViewState extends State<OsmMapView>
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '© OpenStreetMap • Carto',
+                          '© OpenStreetMap contributors',
                           style: TextStyle(
                             fontSize: 9.5,
                             color:
@@ -371,15 +374,13 @@ class _OsmMapViewState extends State<OsmMapView>
 
         final sub = subdomains[(wrappedX + ty).abs() % subdomains.length];
         final primaryUrl =
-            widget.isDarkMode
-                ? 'https://$sub.basemaps.cartocdn.com/dark_all/$tileZoom/$wrappedX/$ty@2x.png'
-                : 'https://$sub.basemaps.cartocdn.com/rastertiles/voyager/$tileZoom/$wrappedX/$ty@2x.png';
-        final fallbackUrl =
             'https://tile.openstreetmap.org/$tileZoom/$wrappedX/$ty.png';
+        final fallbackUrl =
+            'https://$sub.tile.openstreetmap.fr/hot/$tileZoom/$wrappedX/$ty.png';
 
         tiles.add(
           Positioned(
-            key: ValueKey('tile_${widget.isDarkMode}_${tileZoom}_${tx}_$ty'),
+            key: ValueKey('tile_${tileZoom}_${tx}_$ty'),
             left: screenX,
             top: screenY,
             width: scaledTileSize,
@@ -407,7 +408,19 @@ class _OsmMapViewState extends State<OsmMapView>
       }
     }
 
-    return Stack(clipBehavior: Clip.none, children: tiles);
+    final tileStack = Stack(clipBehavior: Clip.none, children: tiles);
+    if (!widget.isDarkMode) return tileStack;
+
+    // Invert & tint standard OSM tiles into a clean dark map theme without external API keys.
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix(<double>[
+        -0.78, 0.0, 0.0, 0.0, 210.0, // R
+        0.0, -0.78, 0.0, 0.0, 218.0, // G
+        0.0, 0.0, -0.72, 0.0, 230.0, // B
+        0.0, 0.0, 0.0, 1.0, 0.0, // A
+      ]),
+      child: tileStack,
+    );
   }
 
   List<Widget> _buildMarkerWidgets(Size size) {
@@ -450,8 +463,16 @@ class _OsmMapViewState extends State<OsmMapView>
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
-              setState(() => _selectedMarkerId = id);
-              marker.onTap?.call();
+              if (marker.onTap != null) {
+                if (_selectedMarkerId != null) {
+                  setState(() => _selectedMarkerId = null);
+                }
+                marker.onTap!();
+              } else if (marker.infoWindow.title?.isNotEmpty ?? false) {
+                setState(() {
+                  _selectedMarkerId = (_selectedMarkerId == id) ? null : id;
+                });
+              }
             },
             child: _MapPinIcon(
               color: pinColor,
@@ -486,7 +507,11 @@ class _OsmMapViewState extends State<OsmMapView>
         (pos.dx - calloutWidth / 2.0)
             .clamp(12.0, math.max(12.0, size.width - calloutWidth - 12.0))
             .toDouble();
-    final top = math.max(90.0, pos.dy - 92.0);
+
+    // Avoid overlapping top search & filter controls (top inset ~140px).
+    // If the marker is near the top of the screen, render callout below the pin.
+    final showBelow = (pos.dy - 92.0) < 140.0;
+    final top = showBelow ? (pos.dy + 8.0) : (pos.dy - 92.0);
 
     return Positioned(
       left: left,

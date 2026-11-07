@@ -1206,6 +1206,13 @@ class _MapScreenState extends State<MapScreen> {
           border: Border.all(
             color: selected ? Colors.transparent : _panelBorder,
           ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x18000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
+            ),
+          ],
         ),
         child: Text(
           label,
