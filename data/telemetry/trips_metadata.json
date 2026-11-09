@@ -1,0 +1,31 @@
+{
+  "dataset_title": "Sri Lanka EV Telemetry Benchmark Repository (Physics-Calibrated Synthetic Reference Traces)",
+  "benchmark_provenance": "Synthetically generated benchmark dataset produced by tool/export_obd_traces.dart modeling MG ZS EV standard CAN PID diagnostic telemetry across Sri Lankan road and topographical profiles.",
+  "vehicle_platform": {
+    "make_model": "MG ZS EV Standard Range 2024 (Simulated Specification)",
+    "battery_pack": "50.3 kWh Lithium Iron Phosphate (CATL LFP)",
+    "nominal_voltage": "384 V",
+    "curb_mass_kg": 1800,
+    "rated_efficiency_km_per_kwh": 6.0,
+    "rated_consumption_kwh_per_100km": 16.67
+  },
+  "simulated_telemetry_schema": {
+    "target_hardware_specification": "OBDLink MX+ Bluetooth OBD-II / CAN Interface (Emulated Data Stream)",
+    "target_bus_protocol": "ISO 15765-4 (CAN 500kbps, 11-bit ID)",
+    "modeled_pids": [
+      {"pid": "0x221154", "name": "HV Battery Current (A)", "resolution": "0.5 Hz - 1.0 Hz"},
+      {"pid": "0x221155", "name": "HV Battery Voltage (V)", "resolution": "0.5 Hz - 1.0 Hz"},
+      {"pid": "0x221156", "name": "BMS State of Charge (%)", "resolution": "0.5 Hz - 1.0 Hz"},
+      {"pid": "0x221101", "name": "Vehicle Ground Speed (km/h)", "resolution": "0.5 Hz - 1.0 Hz"}
+    ]
+  },
+  "trips_count": 8,
+  "corridors": [
+    "Colombo-Galle E01",
+    "Colombo-Kandy A1",
+    "Colombo-Nuwara Eliya A7/A5",
+    "Nuwara Eliya-Kandy A5",
+    "Colombo-Dambulla A1/A6",
+    "Colombo-Katunayake E03"
+  ]
+}

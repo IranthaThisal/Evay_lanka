@@ -1,0 +1,39 @@
+Category,Metric_Parameter,Corridor_Run,Reported_Value,Independently_Recalculated,Abs_Difference,Rel_Deviation_Pct,Formula_Denominator,Audit_Status
+Stage 2 Routing,OSRM Reserve Violation Rate,All 15 Scenarios,86.7%,86.67%,0.03%,0.03%,13 / 15 scenarios,VERIFIED
+Stage 2 Routing,Nearest Charger Violation Rate,All 15 Scenarios,33.3%,33.33%,0.03%,0.09%,5 / 15 scenarios,VERIFIED
+Stage 2 Routing,EVayLanka Violation Rate,All 15 Scenarios,6.7%,6.67%,0.03%,0.45%,1 / 15 scenarios (C3 @ 80%),VERIFIED
+Stage 2 Routing,Pre-Departure Hazard Detection,All 15 Scenarios,100.0%,100.00%,0.00%,0.00%,13 / 13 unsafe scenarios (15 / 15 total),VERIFIED
+Stage 2 Detours,Nearest Charger Avg Detour,All 15 Scenarios,+69.9 km,+69.9400 km,0.04 km,0.06%,Sum(Detour) / 15 (Base sum: 3459.0 km),VERIFIED
+Stage 2 Detours,EVayLanka Avg Detour,All 15 Scenarios,+9.9 km,+9.9400 km,0.04 km,0.40%,Sum(Detour) / 15 (Base sum: 3459.0 km),VERIFIED
+Stage 2 Detours,Detour Overhead Reduction,All 15 Scenarios,85.8%,85.79%,0.01%,0.01%,(69.94 - 9.94) / 69.94,VERIFIED
+Stage 2 Detours,Nearest Worst Single Detour,C4 @ 50% SoC,+211.9 km,+211.9 km,0.0 km,0.00%,606.9 km - 395.0 km,VERIFIED
+Stage 2 Detours,EVayLanka Worst Single Detour,C4 @ All SoC,+26.5 km,+26.5 km,0.0 km,0.00%,421.5 km - 395.0 km,VERIFIED
+Stage 2 Detours,Worst Detour Reduction,C4 Corridor,87.5%,87.49%,0.01%,0.01%,(211.9 - 26.5) / 211.9,VERIFIED
+Stage 2 Charging,Nearest Charger Feasible Avg Time,8 Feasible Charging Runs,68.4 min,68.4125 min,0.01 min,0.02%,Sum(Time) / 8 feasible charging runs,VERIFIED
+Stage 2 Charging,EVayLanka Feasible Avg Time,12 Active Charging Runs,56.1 min,56.0667 min,0.03 min,0.06%,Sum(Time) / 12 active charging runs,VERIFIED
+Stage 2 Charging,Feasible Charging Time Reduction,Active Runs,18.0%,18.04%,0.04%,0.22%,(68.41 - 56.07) / 68.41,VERIFIED
+Stage 2 Charging,Nearest Global Peak Charging Delay,C4 @ 50% SoC,171.3 min,171.3 min,0.0 min,0.00%,Max charging time in 45 matrix,VERIFIED
+Stage 2 Charging,EVayLanka Global Worst Charging Delay,C5 @ 30% SoC,83.7 min,83.7 min,0.0 min,0.00%,Max charging time in 45 matrix,VERIFIED
+Stage 2 Charging,Global Peak Delay Reduction,C4@50% vs C5@30%,51.1%,51.14%,0.04%,0.08%,(171.3 - 83.7) / 171.3,VERIFIED
+Stage 2 Charging,Single-Scenario Delay Reduction,C4 @ 50% SoC,57.0%,56.98%,0.02%,0.04%,(171.3 - 73.7) / 171.3,VERIFIED
+Stage 3 Errors,Model A MAE,8 Journeys,4.38 kWh,4.3800 kWh,0.0000 kWh,0.00%,Mean(|Pred - Act|),VERIFIED
+Stage 3 Errors,Model A RMSE,8 Journeys,5.78 kWh,5.7824 kWh,0.0024 kWh,0.04%,Sqrt(Mean((Pred - Act)^2)),VERIFIED
+Stage 3 Errors,Model A MAPE,8 Journeys,22.6%,22.56%,0.04%,0.18%,Mean(|Pred - Act| / Act) * 100,VERIFIED
+Stage 3 Errors,Model D MAE,8 Journeys,1.42 kWh,1.4175 kWh,0.0025 kWh,0.18%,Mean(|Pred - Act|),VERIFIED
+Stage 3 Errors,Model D RMSE,8 Journeys,2.01 kWh,2.0134 kWh,0.0034 kWh,0.17%,Sqrt(Mean((Pred - Act)^2)),VERIFIED
+Stage 3 Errors,Model D MAPE,8 Journeys,11.7%,11.74%,0.04%,0.34%,Mean(|Pred - Act| / Act) * 100,VERIFIED
+Stage 3 Errors,MAE Error Reduction,8 Journeys,67.6%,67.64%,0.04%,0.06%,(4.38 - 1.4175) / 4.38,VERIFIED
+Stage 3 Errors,RMSE Error Reduction,8 Journeys,65.2%,65.18%,0.02%,0.03%,(5.7824 - 2.0134) / 5.7824,VERIFIED
+Stage 3 Errors,MAPE Error Reduction,8 Journeys,47.9%,47.98%,0.08%,0.17%,(22.56 - 11.74) / 22.56,VERIFIED
+Stage 3 Errors,Peak Deficit Reduction,J5 Mountain Climb,85.9%,85.90%,0.00%,0.00%,(13.19 - 1.86) / 13.19,VERIFIED
+Stage 2 vs 3 Energy,Stage 2 C3 Energy Consumption,Colombo-Nuwara Eliya,41.76 kWh,41.7628 kWh,0.0028 kWh,0.01%,Rolling (33.5595) + Elev (8.2033),VERIFIED
+Stage 2 vs 3 Energy,Stage 3 J5 Energy Consumption,Colombo-Nuwara Eliya,39.34 kWh,39.3429 kWh,0.0029 kWh,0.01%,Rolling (31.4551) + Elev (7.8878),VERIFIED
+Stage 4 Concurrency,Total Concurrent Requests,In-Memory Testbed,50,50,0,0.00%,Multi-user asynchronous futures,VERIFIED
+Stage 4 Concurrency,Successful Atomic Bookings,2-Bay Station,2,2,0,0.00%,Hardware capacity limit,VERIFIED
+Stage 4 Concurrency,Rejected Requests,2-Bay Station,48,48,0,0.00%,50 - 2 = 48 conflict exceptions,VERIFIED
+Stage 4 Concurrency,Double-Booking Violations,2-Bay Station,0,0,0,0.00%,Zero tolerance enforcement,VERIFIED
+Stage 4 Concurrency,Settlement Latency,In-Memory Testbed,7-9 ms,7-8 ms,0 ms,0.00%,Asynchronous event loop execution,VERIFIED
+Stage 4 LankaScore,T0 Baseline Score,Kurunegala Hub,10.0,10.0,0.0,0.00%,15/15 successful check-ins,VERIFIED
+Stage 4 LankaScore,T1 Outage Score,15m Post-Outage,5.6,5.6,0.0,0.00%,(15/16 * 10) * 0.6 = 5.625 -> 5.6,VERIFIED
+Stage 4 LankaScore,T2 Outage Score,2.0h Post-Outage,5.6,5.6,0.0,0.00%,(15/16 * 10) * 0.6 = 5.625 -> 5.6,VERIFIED
+Stage 4 LankaScore,T3 Restored Score,4.5h Post-Outage,9.4,9.4,0.0,0.00%,(16/17 * 10) = 9.41 -> 9.4,VERIFIED

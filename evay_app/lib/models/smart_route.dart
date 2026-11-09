@@ -44,6 +44,8 @@ class SmartRoute {
     this.totalChargingTimeMinutes = 0.0,
     this.totalEnergyConsumedKwh = 0.0,
     this.elevationEnergyPenaltyKwh = 0.0,
+    this.isFeasible = true,
+    this.hasReserveViolation = false,
   }) : _stopsByChargerId = {
          for (final stop in chargingStops) stop.charger.id: stop,
        };
@@ -62,11 +64,16 @@ class SmartRoute {
   final double totalChargingTimeMinutes;
   final double totalEnergyConsumedKwh;
   final double elevationEnergyPenaltyKwh;
+  final bool isFeasible;
+  final bool hasReserveViolation;
 
   final Map<String, ChargingStop> _stopsByChargerId;
 
   bool get hasChargingStops => chargingStops.isNotEmpty;
   int get stopsCount => chargingStops.length;
+
+  /// Whether the route is safe for immediate navigation guidance without battery exhaustion.
+  bool get canInitiateNavigation => isFeasible && !hasReserveViolation;
 
   /// O(1) lookup for whether a charger is a planned stop along this route.
   ChargingStop? stopForCharger(String chargerId) => _stopsByChargerId[chargerId];

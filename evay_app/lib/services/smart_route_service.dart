@@ -261,6 +261,19 @@ class SmartRouteService {
   static const double beta = 0.45;  // Normalized power & energy weight
   static const double gamma = 0.20; // Normalized slot/queue weight
 
+  /// Validates whether a generated SmartRoute meets all strict safety criteria
+  /// before active turn-by-turn navigation guidance can be initiated.
+  /// Rejects routes that are marked infeasible, have reserve violations, or
+  /// have an arrival SoC below the mandatory safety reserve floor (default 10%).
+  static bool validateNavigationReadiness(
+    SmartRoute route, {
+    double minimumReserveFloorPercent = 10.0,
+  }) {
+    if (!route.isFeasible || route.hasReserveViolation) return false;
+    if (route.arrivalBatteryPercent < minimumReserveFloorPercent) return false;
+    return true;
+  }
+
   final RouteService _routeService;
   final SriLankaElevationModel _elevationModel;
 
@@ -327,9 +340,22 @@ class SmartRouteService {
     );
 
     double totalChargingTime = 0.0;
+    double totalEnergyInjectedKwh = 0.0;
     for (final stop in stops) {
       totalChargingTime += stop.chargingTimeMinutes;
+      totalEnergyInjectedKwh += stop.energyAddedKwh;
     }
+
+    final capacity = batteryCapacityKwh ?? 55.0;
+    final ratedEfficiency = (efficiencyKmPerKwh != null && efficiencyKmPerKwh > 0) ? (1.0 / efficiencyKmPerKwh) : 0.18;
+    final effectiveRate = ratedEfficiency * climateFactor * conditions.compositeEnvironmentalMultiplier;
+    final totalTripDist = cumulativeDistances.isEmpty ? 0.0 : cumulativeDistances.last;
+    final totalTripDemand = (totalTripDist * effectiveRate) + elevationEnergyPenaltyKwh;
+    final startKwh = capacity * ((batteryPercent ?? 70.0).clamp(5.0, 100.0) / 100.0);
+    final finalKwh = startKwh + totalEnergyInjectedKwh - totalTripDemand;
+    final arrivalSocPercent = (finalKwh / capacity) * 100.0;
+    final hasReserveViolation = arrivalSocPercent < reserveThresholdPercent;
+    final isFeasible = !hasReserveViolation;
 
     return SmartRoute(
       origin: origin,
@@ -339,11 +365,15 @@ class SmartRouteService {
       distanceText: route.distanceText,
       durationText: route.durationText,
       chargingStops: stops,
-      totalDistanceKm: cumulativeDistances.isEmpty ? 0.0 : cumulativeDistances.last,
+      totalDistanceKm: totalTripDist,
       totalElevationGainM: gainM,
       totalElevationLossM: lossM,
+      arrivalBatteryPercent: arrivalSocPercent,
       totalChargingTimeMinutes: totalChargingTime,
+      totalEnergyConsumedKwh: totalTripDemand,
       elevationEnergyPenaltyKwh: elevationEnergyPenaltyKwh,
+      isFeasible: isFeasible,
+      hasReserveViolation: hasReserveViolation,
     );
   }
 

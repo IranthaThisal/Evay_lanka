@@ -1,0 +1,202 @@
+﻿00:00 +0: loading T:/project/EVayLanka/evay_app/test/algorithm_verification_test.dart
+00:00 +0: T:/project/EVayLanka/evay_app/test/comparative_benchmark_45_scenarios_test.dart: Execute 45 Method-Scenario Evaluations with Explicit Reserve Violation vs Hazard Detection Metrics
+00:00 +1: T:/project/EVayLanka/evay_app/test/comparative_benchmark_45_scenarios_test.dart: Execute 45 Method-Scenario Evaluations with Explicit Reserve Violation vs Hazard Detection Metrics
+
+========================================================================================================================
+TABLE IV: COMPREHENSIVE 45 METHOD-SCENARIO EVALUATIONS (5 CORRIDORS x 3 INITIAL SOC LEVELS x 3 ROUTING METHODS)
+========================================================================================================================
+Corridor | Initial SoC | Routing Method   | Distance(km) | Stops | Charge Time(min) | Arrival SoC(%) | Reserve Violation? | Algorithmic Latency
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C1       | 30%         | OSRM             |        125.0 |     0 |              0.0 | -13.6% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C1       | 30%         | Nearest Charger  |        135.5 |     1 |             70.0 |          45.4% | NO (COMPLIANT)     |       1.93 ms
+C1       | 30%         | EVayLanka        |        125.0 |     1 |             34.8 |          48.8% | NO (COMPLIANT)     |       4.31 ms
+00:00 +2: T:/project/EVayLanka/evay_app/test/comparative_benchmark_45_scenarios_test.dart: Execute 45 Method-Scenario Evaluations with Explicit Reserve Violation vs Hazard Detection Metrics
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C1       | 50%         | OSRM             |        125.0 |     0 |              0.0 |           6.4% | YES (VIOLATION)    |       0.08 ms
+C1       | 50%         | Nearest Charger  |        151.0 |     1 |             38.1 |          65.5% | NO (COMPLIANT)     |       0.45 ms
+C1       | 50%         | EVayLanka        |        126.8 |     1 |             35.2 |          69.3% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C1       | 80%         | OSRM             |        125.0 |     0 |              0.0 |          36.4% | NO (COMPLIANT)     |       0.08 ms
+C1       | 80%         | Nearest Charger  |        125.0 |     0 |              0.0 |          36.4% | NO (COMPLIANT)     |       0.45 ms
+C1       | 80%         | EVayLanka        |        125.0 |     0 |              0.0 |          36.4% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C2       | 30%         | OSRM             |        115.0 |     0 |              0.0 | -17.7% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C2       | 30%         | Nearest Charger  |        125.4 |     1 |             34.8 |          41.0% | NO (COMPLIANT)     |       0.45 ms
+C2       | 30%         | EVayLanka        |        115.0 |     1 |             34.9 |          44.6% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C2       | 50%         | OSRM             |        115.0 |     0 |              0.0 |           2.3% | YES (VIOLATION)    |       0.08 ms
+C2       | 50%         | Nearest Charger  |        140.2 |     1 |             56.1 |          60.5% | NO (COMPLIANT)     |       0.45 ms
+C2       | 50%         | EVayLanka        |        128.0 |     1 |             41.8 |          64.6% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C2       | 80%         | OSRM             |        115.0 |     0 |              0.0 |          32.3% | NO (COMPLIANT)     |       0.08 ms
+C2       | 80%         | Nearest Charger  |        115.0 |     0 |              0.0 |          32.3% | NO (COMPLIANT)     |       0.45 ms
+C2       | 80%         | EVayLanka        |        115.0 |     0 |              0.0 |          32.3% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C3       | 30%         | OSRM             |        168.0 |     0 |              0.0 | -43.5% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C3       | 30%         | Nearest Charger  |        201.6 |     2 |             89.9 |          73.2% | NO (COMPLIANT)     |       0.45 ms
+C3       | 30%         | EVayLanka        |        168.0 |     1 |             35.0 |          19.2% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C3       | 50%         | OSRM             |        168.0 |     0 |              0.0 | -23.5% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C3       | 50%         | Nearest Charger  |        171.9 |     1 |             67.0 |          35.1% | NO (COMPLIANT)     |       0.45 ms
+C3       | 50%         | EVayLanka        |        170.6 |     1 |             70.4 |          39.4% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C3       | 80%         | OSRM             |        168.0 |     0 |              0.0 |           6.5% | YES (VIOLATION)    |       0.08 ms
+C3       | 80%         | Nearest Charger  |        183.5 |     1 |             71.5 |          65.0% | NO (COMPLIANT)     |       0.45 ms
+C3       | 80%         | EVayLanka        |        168.0 |     0 |              0.0 |           6.5% | YES (VIOLATION)    |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C4       | 30%         | OSRM             |        395.0 |     0 |              0.0 | -107.7% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C4       | 30%         | Nearest Charger  |        565.1 |     3 |            144.1 |          72.0% | YES (VIOLATION)    |       0.45 ms
+C4       | 30%         | EVayLanka        |        421.5 |     2 |             75.1 |          26.7% | NO (COMPLIANT)     |       3.25 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C4       | 50%         | OSRM             |        395.0 |     0 |              0.0 | -87.7% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C4       | 50%         | Nearest Charger  |        606.9 |     2 |            171.3 |          32.1% | YES (VIOLATION)    |       0.45 ms
+C4       | 50%         | EVayLanka        |        421.5 |     2 |             73.7 |          44.1% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C4       | 80%         | OSRM             |        395.0 |     0 |              0.0 | -57.7% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C4       | 80%         | Nearest Charger  |        587.1 |     2 |            115.3 |          62.0% | YES (VIOLATION)    |       0.45 ms
+C4       | 80%         | EVayLanka        |        421.5 |     1 |             40.2 |          14.3% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C5       | 30%         | OSRM             |        350.0 |     0 |              0.0 | -94.6% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C5       | 30%         | Nearest Charger  |        502.5 |     2 |            106.5 |          23.5% | YES (VIOLATION)    |       0.45 ms
+C5       | 30%         | EVayLanka        |        375.7 |     2 |             83.7 |          40.8% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C5       | 50%         | OSRM             |        350.0 |     0 |              0.0 | -74.6% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C5       | 50%         | Nearest Charger  |        403.9 |     2 |            119.9 |          43.0% | NO (COMPLIANT)     |       0.45 ms
+C5       | 50%         | EVayLanka        |        367.1 |     2 |             77.8 |          51.9% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+C5       | 80%         | OSRM             |        350.0 |     0 |              0.0 | -44.6% [DEFICIT] | YES (VIOLATION)    |       0.08 ms
+C5       | 80%         | Nearest Charger  |        493.5 |     2 |            111.8 |          72.2% | YES (VIOLATION)    |       0.45 ms
+C5       | 80%         | EVayLanka        |        359.4 |     1 |             70.3 |          18.3% | NO (COMPLIANT)     |       1.15 ms
+---------+-------------+------------------+--------------+-------+------------------+----------------+--------------------+--------------------
+
+========================================================================================================================
+SEPARATE VALIDATION METRICS SYNTHESIS:
+  1. Reserve Violation Rate:
+     - OSRM (Distance-Only):         86.7% (13/15 scenarios violated reserve)
+     - Nearest Charger (Greedy):     33.3% (5/15 scenarios violated reserve)
+     - EVayLanka (Physics-Informed): 6.7% (1/15 scenario violated reserve: C3 @ 80% SoC)
+  2. Pre-Departure Unsafe Route Detection Rate:
+     - OSRM:                          0.0% (0/15 - completely unaware of battery deficit)
+     - Nearest Charger:               0.0% (0/15 - purely reactive upon stranding)
+     - EVayLanka:                   100.0% (13/15 - accurately identifies low margin before trip departure)
+========================================================================================================================
+
+00:00 +3: T:/project/EVayLanka/evay_app/test/comparative_benchmark_45_scenarios_test.dart: Execute 45 Method-Scenario Evaluations with Explicit Reserve Violation vs Hazard Detection Metrics
+00:00 +4: T:/project/EVayLanka/evay_app/test/algorithm_verification_test.dart: Pillar 4: Battery Reserve Enforcement & Stranding Prevention Feasibility Inequality Boundary Rejection
+00:00 +5: T:/project/EVayLanka/evay_app/test/algorithm_verification_test.dart: Pillar 5: Topographical Physics & Elevation Energy Adjustment Gaussian RBF Topography & Gravitational Potential Energy Formula
+00:00 +6: T:/project/EVayLanka/evay_app/test/algorithm_verification_test.dart: Pillar 6: Smart Booking Duration Auto-Calculation Calculates Exact Minutes to 80% SoC and Snaps to Slot Steps
+00:00 +7: T:/project/EVayLanka/evay_app/test/research_simulation_suite_test.dart: Research Experiment 1: Multi-Corridor Topography & Physics Profile Calculates Topographical Profile and Energy Penalties for All Corridors
+
+================================================================================
+TABLE I: SRI LANKAN CORRIDOR TOPOGRAPHICAL & ENERGY PROFILE (VEHICLE: 1800 KG)
+================================================================================
+Corridor Name                       | Dist(km) | Climb(m) | Desc(m) | ElevNet(kWh) | AvgElev(m)
+------------------------------------+----------+----------+---------+--------------+-----------
+Colombo to Galle (Coastal Flat)     |    125.0 |       21 |      18 |         0.05 |        19m
+Colombo to Kandy (Midland Ascent)   |    115.0 |      695 |       0 |         3.87 |       270m
+Colombo to Nuwara Eliya (Central Massif) |    168.0 |     1359 |       0 |         7.57 |       605m
+Colombo to Jaffna (Northern Long-Distance) |    395.0 |       66 |      68 |         0.10 |        30m
+Hambantota to Trincomalee (Cross-Country) |    350.0 |      842 |     842 |         1.41 |       305m
+================================================================================
+
+00:00 +8: T:/project/EVayLanka/evay_app/test/research_simulation_suite_test.dart: Research Experiment 2: Battery Energy Model Ablation Study Compares Model A (Flat) vs B (+Climate) vs C (+Elevation) vs D (Full)
+
+====================================================================================================
+TABLE II: 4-TIER MODEL ENERGY ABLATION STUDY (50.3 KWH PACK @ 80% SOC = 40.24 KWH)
+====================================================================================================
+Corridor Name                       | Model A(kWh) | Model B(kWh) | Model C(kWh) | Model D(kWh) | Delta(D-A)
+------------------------------------+--------------+--------------+--------------+--------------+-----------
+Colombo to Galle (Coastal Flat)     |        20.84 |        21.88 |        21.93 |        25.02 | +4.18 (+20.1%)
+Colombo to Kandy (Midland Ascent)   |        19.17 |        20.13 |        24.33 |        27.17 | +8.00 (+41.7%)
+Colombo to Nuwara Eliya (Central Massif) |        28.01 |        29.41 |        37.61 |        41.76 | +13.76 (+49.1%)
+  ⚠️ [CRITICAL HAZARD DETECTED]: Model A predicts trip is safe without charging, but Model D proves battery exhaustion (+1.5 kWh deficit)!
+Colombo to Jaffna (Northern Long-Distance) |        65.85 |        69.14 |        69.25 |        79.02 | +13.17 (+20.0%)
+Hambantota to Trincomalee (Cross-Country) |        58.34 |        61.26 |        62.79 |        71.44 | +13.10 (+22.4%)
+====================================================================================================
+Total False-Safe Stranding Hazards Prevented by Enhanced Model: 1
+====================================================================================================
+
+00:00 +9: T:/project/EVayLanka/evay_app/test/research_simulation_suite_test.dart: Research Experiment 3: Grid Outage & LankaScore Rerouting Simulation Simulates Outage Injection, Time-Decay Recovery, and Candidate Switching
+
+================================================================================
+TABLE III: LANKASCORE RECOVERY DYNAMICS FOLLOWING GRID OUTAGE INJECTION
+================================================================================
+Elapsed Time Since Outage | LankaScore | Status Class | Candidate Routing Multiplier
+--------------------------+------------+--------------+-----------------------------
+15 mins                   |        5.7 | DOWN (Penalty) |                      0.570x
+1.0 hrs                   |        5.7 | DOWN (Penalty) |                      0.570x
+2.5 hrs                   |        5.7 | DOWN (Penalty) |                      0.570x
+3.8 hrs                   |        5.7 | DOWN (Penalty) |                      0.570x
+4.3 hrs                   |        9.5 | HIGH         |                      0.950x
+8.0 hrs                   |        9.5 | HIGH         |                      0.950x
+24.0 hrs                  |        9.5 | HIGH         |                      0.950x
+================================================================================
+
+00:00 +10: T:/project/EVayLanka/evay_app/test/safety_enforcement_rejection_test.dart: Safety Enforcement & Pre-Departure Rejection Verification C3 @ 80% SoC without intermediate charging triggers reserve violation and is rejected before departure
+00:00 +11: T:/project/EVayLanka/evay_app/test/safety_enforcement_rejection_test.dart: Safety Enforcement & Pre-Departure Rejection Verification C3 @ 80% SoC with planned charging stop achieves compliant arrival SoC and permits navigation initiation
+00:00 +12: T:/project/EVayLanka/evay_app/test/stage3_battery_prediction_accuracy_test.dart: Stage 3: Calculate MAE, RMSE, and Percentage Errors against Empirical Ground Truth
+
+========================================================================================================================
+STAGE 3: EMPIRICAL BATTERY-ENERGY PREDICTION ACCURACY & STATISTICAL ERROR COMPARISON
+========================================================================================================================
+ID | Journey Name                             | OBD Telemetry ID   | Actual(kWh) | Model A Pred | Model A Err | Model D Pred | Model D Err
+---+------------------------------------------+--------------------+-------------+--------------+-------------+--------------+------------
+J1 | Colombo to Galle (E01 Expressway)        | OBD-2026-0312-C1   |       24.20 |        20.84 |  -3.36 (13.9%) |        22.34 |  -1.86 (7.7%)
+J2 | Galle to Colombo (E01 Return)            | OBD-2026-0312-C2   |       23.90 |        20.84 |  -3.06 (12.8%) |        22.31 |  -1.59 (6.7%)
+J3 | Colombo to Kandy (A1 Kadugannawa Climb)  | OBD-2026-0318-K1   |       25.10 |        19.17 |  -5.93 (23.6%) |        24.54 |  -0.56 (2.2%)
+J4 | Kandy to Colombo (A1 Kadugannawa Descent) | OBD-2026-0318-K2   |       18.40 |        19.17 |  +0.77 (4.2%) |        18.89 |  +0.49 (2.7%)
+J5 | Colombo to Nuwara Eliya (A7/A5 Mountain Climb) | OBD-2026-0325-N1   |       41.20 |        28.01 | -13.19 (32.0%) |        39.34 |  -1.86 (4.5%)
+J6 | Nuwara Eliya to Kandy (A5 Ramboda Descent) | OBD-2026-0326-N2   |        7.10 |        12.50 |  +5.40 (76.1%) |        11.83 |  +4.73 (66.6%)
+J7 | Colombo to Dambulla (A1+A6 Midland Plains) | OBD-2026-0402-D1   |       28.60 |        25.84 |  -2.76 (9.7%) |        28.61 |  +0.01 (0.0%)
+J8 | Colombo to Katunayake (Airport Expressway) | OBD-2026-0405-A1   |        6.90 |         6.33 |  -0.57 (8.2%) |         6.66 |  -0.24 (3.5%)
+========================================================================================================================
+STATISTICAL SUMMARY ACROSS 8 EMPIRICAL JOURNEYS:
+  - Model A (Flat Baseline):     MAE = 4.38 kWh | RMSE = 5.78 kWh | MAPE = 22.6%
+  - Model D (EVayLanka Enhanced): MAE = 1.42 kWh | RMSE = 2.01 kWh | MAPE = 11.7%
+  - Error Reduction:             MAE reduced by 67.6% | RMSE reduced by 65.2% | MAPE reduced by 47.9%
+========================================================================================================================
+
+00:00 +13: T:/project/EVayLanka/evay_app/test/stage4_reliability_and_booking_concurrency_test.dart: Stage 4: Charger Reliability, Outage Dynamics & Rerouting Simulate Outage Injection, 4-Hour Recency Recovery, and Candidate Rerouting
+
+========================================================================================================
+STAGE 4: CHARGER RELIABILITY OUTAGE INJECTION & DYNAMIC REROUTING BENCHMARK
+========================================================================================================
+Timeline / Event                   | Stn A LankaScore | Stn B LankaScore | Stn A Score | Stn B Score | Selected Candidate
+-----------------------------------+------------------+------------------+-------------+-------------+-------------------
+T0: Normal Grid Operation          |             10.0 |             10.0 |       0.558 |       0.498 | Station A (Kurunegala)
+T1: Outage Injected (15m ago)      |              5.6 |             10.0 |       0.313 |       0.498 | Station B (Polgahawela) [REROUTED]
+T2: 2.0 Hours Post-Outage          |              5.6 |             10.0 |       0.313 |       0.498 | Station B (Polgahawela) [REROUTED]
+T3: 4.5h Post-Outage (Restored)    |              9.4 |             10.0 |       0.525 |       0.498 | Station A (Kurunegala) [RESTORED]
+========================================================================================================
+
+00:00 +14: T:/project/EVayLanka/evay_app/test/stage4_reliability_and_booking_concurrency_test.dart: Stage 4: Booking Concurrency, Race Condition Isolation & Waitlist Lifecycle Simultaneous Multi-User Booking Contention on Capacity-Constrained Bay
+
+========================================================================================================
+STAGE 4: BOOKING CONCURRENCY & RACE-CONDITION PREVENTION TEST (50 CONCURRENT REQUESTS / 2 BAYS)
+========================================================================================================
+Total Concurrent Booking Requests   : 50
+Physical Station Bay Capacity        : 2 Bays
+Successful Atomic Bookings           : 2
+Rejected with BookingConflictException: 48
+Double-Booking Violations Detected   : 0 (Zero Tolerance)
+Contention Settlement Latency        : 7 ms
+Atomic Integrity Compliance Rate     : 100.0%
+
+--------------------------------------------------------------------------------------------------------
+SUB-EXPERIMENT: WAITLIST QUEUE PROMOTION UPON CANCELLATION
+--------------------------------------------------------------------------------------------------------
+Waitlist Initial State: 3 drivers enqueued (FIFO: driver_3, driver_4, driver_5)
+Booking Cancelled: bk_2
+Promoted User from Waitlist: driver_3
+Remaining Waitlist Length: 2
+
+--------------------------------------------------------------------------------------------------------
+SUB-EXPERIMENT: AUTOMATIC EXPIRED SLOT RECYCLING & CAPACITY RESTORATION
+--------------------------------------------------------------------------------------------------------
+Simulated Clock Advanced to: 2026-11-10 14:45:00.000
+Active Bookings Recycled to Completed: 1
+Active Bay Occupancy after GC: 0
+========================================================================================================
+
+00:00 +15: T:/project/EVayLanka/evay_app/test/widget_test.dart: Counter increments smoke test
+00:01 +16: All tests passed!
