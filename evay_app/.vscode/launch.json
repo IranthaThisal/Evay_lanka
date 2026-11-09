@@ -7,8 +7,7 @@
       "type": "dart",
       "program": "lib/main.dart",
       "toolArgs": [
-        "--dart-define=NEWS_API_KEY=1834ddb3babe466dad9e21adb2d1ddf7",
-        "--dart-define=GOOGLE_DIRECTIONS_API_KEY=AIzaSyCypxUIgv01ZTGmFksc7VdoSqEPkEfwock"
+        "--dart-define=NEWS_API_KEY=1834ddb3babe466dad9e21adb2d1ddf7"
       ]
     }
   ]

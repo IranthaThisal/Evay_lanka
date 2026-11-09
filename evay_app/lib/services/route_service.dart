@@ -20,11 +20,6 @@ class RouteDetails {
 }
 
 class RouteService {
-  static const String _directionsApiKey = String.fromEnvironment(
-    'GOOGLE_DIRECTIONS_API_KEY',
-    defaultValue: '',
-  );
-
   // Built-in Sri Lanka city coordinates for instant, zero-latency fallback
   static const Map<String, LatLng> _sriLankaCities = {
     'colombo': LatLng(6.9271, 79.8612),
@@ -156,19 +151,7 @@ class RouteService {
       // Fall back if OSRM is temporarily unreachable
     }
 
-    // 2. Secondary: Google Directions API if a valid key was explicitly provided
-    if (_directionsApiKey.trim().isNotEmpty) {
-      try {
-        return await _fetchGoogleRoute(
-          origin: origin,
-          destination: destination,
-        );
-      } catch (_) {
-        // Fall through to geometric road estimation
-      }
-    }
-
-    // 3. Offline / Failsafe fallback: Geodesic road-adjusted route
+    // 2. Offline / Failsafe fallback: Geodesic road-adjusted route
     return _buildFallbackRoute(origin: origin, destination: destination);
   }
 
@@ -217,54 +200,6 @@ class RouteService {
       bounds: _boundsFromPoints(points),
       distanceText: _formatDistance(distanceKm),
       durationText: _formatDuration(durationMinutes),
-    );
-  }
-
-  Future<RouteDetails> _fetchGoogleRoute({
-    required LatLng origin,
-    required LatLng destination,
-  }) async {
-    final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-      'origin': '${origin.latitude},${origin.longitude}',
-      'destination': '${destination.latitude},${destination.longitude}',
-      'mode': 'driving',
-      'key': _directionsApiKey,
-    });
-
-    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Directions API request failed (${response.statusCode}).',
-      );
-    }
-
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final status = data['status']?.toString() ?? 'UNKNOWN';
-    if (status != 'OK') {
-      throw Exception('Directions status: $status');
-    }
-
-    final routes = data['routes'] as List<dynamic>;
-    if (routes.isEmpty) {
-      throw Exception('No route found for the selected destination.');
-    }
-
-    final route = routes.first as Map<String, dynamic>;
-    final legs = route['legs'] as List<dynamic>;
-    final leg = legs.first as Map<String, dynamic>;
-    final overview = route['overview_polyline'] as Map<String, dynamic>;
-    final bounds = route['bounds'] as Map<String, dynamic>;
-
-    return RouteDetails(
-      points: _decodePolyline(overview['points'] as String),
-      bounds: LatLngBounds(
-        southwest: _latLngFromJson(bounds['southwest'] as Map<String, dynamic>),
-        northeast: _latLngFromJson(bounds['northeast'] as Map<String, dynamic>),
-      ),
-      distanceText:
-          (leg['distance'] as Map<String, dynamic>)['text']?.toString() ?? '-',
-      durationText:
-          (leg['duration'] as Map<String, dynamic>)['text']?.toString() ?? '-',
     );
   }
 
@@ -340,13 +275,6 @@ class RouteService {
       return '$hours ${hours == 1 ? 'hr' : 'hrs'}';
     }
     return '$hours ${hours == 1 ? 'hr' : 'hrs'} $remMins mins';
-  }
-
-  LatLng _latLngFromJson(Map<String, dynamic> json) {
-    return LatLng(
-      (json['lat'] as num).toDouble(),
-      (json['lng'] as num).toDouble(),
-    );
   }
 
   List<LatLng> _decodePolyline(String encoded) {
