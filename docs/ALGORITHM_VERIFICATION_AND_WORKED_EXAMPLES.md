@@ -40,9 +40,9 @@ $$\alpha + \beta + \gamma = 1.0, \quad \alpha \ge 0, \, \beta \ge 0, \, \gamma \
 $$\frac{D}{D_{\max}} \in [0, 1], \quad \frac{E}{E_{\max}} \in [0, 1], \quad \frac{C}{C_{\max}} \in [0, 1]$$
 
 #### Calibrated Parameter Values
-* $\alpha = 0.40$ (Distance weighting factor)
-* $\beta = 0.35$ (Energy consumption weighting factor)
-* $\gamma = 0.25$ (Charging session delay weighting factor)
+* $\alpha = 0.35$ (Distance weighting factor)
+* $\beta = 0.45$ (Energy consumption weighting factor)
+* $\gamma = 0.20$ (Charging session delay weighting factor)
 * Domain Upper Bounds:
   * $D_{\max} = 500.0\text{ km}$ (Maximum typical interprovincial transit in Sri Lanka)
   * $E_{\max} = 100.0\text{ kWh}$ (Maximum pack capacity / single long-distance demand)
@@ -73,18 +73,18 @@ $$\frac{D}{D_{\max}} \in [0, 1], \quad \frac{E}{E_{\max}} \in [0, 1], \quad \fra
 $$\text{Norm}_D(A) = \frac{126.0}{500.0} = 0.2520$$
 $$\text{Norm}_E(A) = \frac{22.8}{100.0} = 0.2280$$
 $$\text{Norm}_C(A) = \frac{0.0}{90.0} = 0.0000$$
-$$\text{Cost}(A) = (0.40 \times 0.2520) + (0.35 \times 0.2280) + (0.25 \times 0.0000)$$
-$$\text{Cost}(A) = 0.1008 + 0.0798 + 0.0000 = \mathbf{0.1806}$$
+$$\text{Cost}(A) = (0.35 \times 0.2520) + (0.45 \times 0.2280) + (0.20 \times 0.0000)$$
+$$\text{Cost}(A) = 0.08820 + 0.10260 + 0.00000 = \mathbf{0.1908}$$
 
 **Route B:**
 $$\text{Norm}_D(B) = \frac{138.0}{500.0} = 0.2760$$
 $$\text{Norm}_E(B) = \frac{26.1}{100.0} = 0.2610$$
-$$\text{Norm}_C(B) = \frac{22.0}{90.0} = 0.2444$$
-$$\text{Cost}(B) = (0.40 \times 0.2760) + (0.35 \times 0.2610) + (0.25 \times 0.2444)$$
-$$\text{Cost}(B) = 0.1104 + 0.09135 + 0.06110 = \mathbf{0.2629}$$
+$$\text{Norm}_C(B) = \frac{22.0}{90.0} \approx 0.24444$$
+$$\text{Cost}(B) = (0.35 \times 0.2760) + (0.45 \times 0.2610) + \left(0.20 \times \frac{22.0}{90.0}\right)$$
+$$\text{Cost}(B) = 0.09660 + 0.11745 + 0.04889 = \mathbf{0.26294}$$
 
 **Result:**  
-$\text{Cost}(A) = 0.1806 < \text{Cost}(B) = 0.2629 \implies$ **Route A is optimal and selected.**
+$\text{Cost}(A) = 0.1908 < \text{Cost}(B) = 0.26294 \implies$ **Route A is optimal and selected.**
 
 ---
 

@@ -82,9 +82,9 @@ Early route evaluation used raw sums of mismatched physical units (kilometers, k
 1. **Normalized Dimensionless Routing Cost Function:**
    Eliminated dimensional inconsistency by scaling each metric to a bounded domain $[0, 1]$ before applying calibrated trade-off weights:
    $$\text{Cost}(r_i) = \alpha \left(\frac{D_i}{D_{\max}}\right) + \beta \left(\frac{E_i}{E_{\max}}\right) + \gamma \left(\frac{C_i}{C_{\max}}\right)$$
-   * $\alpha = 0.40$ (Route distance weight, $D_{\max} = 500\text{ km}$)
-   * $\beta = 0.35$ (Energy consumption weight, $E_{\max} = 100\text{ kWh}$)
-   * $\gamma = 0.25$ (Charging duration delay weight, $C_{\max} = 90\text{ mins}$)
+   * $\alpha = 0.35$ (Route distance/detour weight, $D_{\max} = 500\text{ km}$)
+   * $\beta = 0.45$ (Energy consumption/power weight, $E_{\max} = 100\text{ kWh}$)
+   * $\gamma = 0.20$ (Charging duration delay weight, $C_{\max} = 90\text{ mins}$)
 
 2. **Calibrated Range Anxiety Index (RAI):**
    Formulated a balanced 3-factor metric ($w_b + w_r + w_c = 1.0$):
