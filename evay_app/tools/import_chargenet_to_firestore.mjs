@@ -60,7 +60,7 @@ function toFirestoreWrite(point) {
   const name = text(point.location) || `ChargeNet ${reference}`;
   const address = text(point.address);
   const status = text(point.availability_status).toUpperCase();
-  const powerKw = powerFrom(type, name);
+  const powerKw = powerFrom(type, name, address);
   const docId = `chargenet-${reference}`;
   const docPath = `projects/${projectId}/databases/(default)/documents/${collection}/${docId}`;
 
@@ -158,15 +158,27 @@ async function getAccessToken(serviceAccount) {
 function cityFromAddress(address) {
   const parts = address
     .split(',')
-    .map((part) => part.trim())
+    .map((part) => part.trim().replace(/\.+$/, ''))
     .filter(Boolean);
 
-  if (parts.length === 0) return 'ChargeNet';
+  if (parts.length === 0) return 'Sri Lanka';
+  for (let i = parts.length - 1; i >= 0; i--) {
+    let part = parts[i]
+      .replace(/0\d{9}.*$/, '')
+      .replace(/Station Owner.*$/i, '')
+      .replace(/contact number.*$/i, '')
+      .replace(/\+?\d{2,4}\s*\d{3,4}/g, '')
+      .replace(/\(.*?\)/g, '')
+      .trim();
+    if (part.length >= 3 && !/^\d+$/.test(part) && !part.toLowerCase().includes('testing')) {
+      return part;
+    }
+  }
   return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
 }
 
-function powerFrom(type, name) {
-  const match = name.match(/(\d+(?:\.\d+)?)\s*kW/i);
+function powerFrom(type, name, address = '') {
+  const match = name.match(/(\d+(?:\.\d+)?)\s*kW/i) || address.match(/(\d+(?:\.\d+)?)\s*kW/i);
   if (match) return Number(match[1]);
   if (type.toUpperCase() === 'L3') return 50;
   if (type.toUpperCase() === 'L2') return 6.6;

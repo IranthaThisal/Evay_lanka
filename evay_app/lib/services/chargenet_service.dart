@@ -58,30 +58,53 @@ class ChargeNetService {
       lat: lat,
       lng: lng,
       slots: status == 'AVAILABLE' ? 1 : 0,
-      powerKw: _powerFrom(type: type, name: location),
+      powerKw: _powerFrom(type: type, name: location, address: address),
       connectorTypes: [
         if (type.isNotEmpty) type,
         if (protocol.isNotEmpty) protocol.replaceAll('_', ' '),
       ],
+      address: address,
+      network: 'ChargeNET',
+      status: status,
     );
   }
 
   String _cityFromAddress(String address) {
-    if (address.isEmpty) return 'ChargeNet';
+    if (address.isEmpty) return 'Sri Lanka';
 
     final parts =
         address
             .split(',')
-            .map((part) => part.trim())
+            .map((part) => part.trim().replaceAll(RegExp(r'\.+$'), ''))
             .where((part) => part.isNotEmpty)
             .toList(growable: false);
-    if (parts.isEmpty) return 'ChargeNet';
+    if (parts.isEmpty) return 'Sri Lanka';
+
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var part = parts[i]
+          .replaceAll(RegExp(r'0\d{9}.*$'), '')
+          .replaceAll(RegExp(r'Station Owner.*$', caseSensitive: false), '')
+          .replaceAll(RegExp(r'contact number.*$', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\+?\d{2,4}\s*\d{3,4}'), '')
+          .replaceAll(RegExp(r'\(.*?\)'), '')
+          .trim();
+      if (part.length >= 3 &&
+          !RegExp(r'^\d+$').hasMatch(part) &&
+          !part.toLowerCase().contains('testing')) {
+        return part;
+      }
+    }
 
     return parts.length >= 2 ? parts[parts.length - 2] : parts.last;
   }
 
-  double? _powerFrom({required String type, required String name}) {
-    final match = _powerRegex.firstMatch(name);
+  double? _powerFrom({
+    required String type,
+    required String name,
+    required String address,
+  }) {
+    final match =
+        _powerRegex.firstMatch(name) ?? _powerRegex.firstMatch(address);
     if (match != null) return double.tryParse(match.group(1)!);
 
     return switch (type.toUpperCase()) {

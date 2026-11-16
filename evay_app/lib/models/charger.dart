@@ -9,6 +9,9 @@ class Charger {
   final int slots;
   final double? powerKw;
   final List<String> connectorTypes;
+  final String? address;
+  final String? network;
+  final String? status;
 
   Charger({
     required this.id,
@@ -19,6 +22,9 @@ class Charger {
     required this.slots,
     this.powerKw,
     this.connectorTypes = const [],
+    this.address,
+    this.network,
+    this.status,
   });
 
   static Charger? tryFromDoc(DocumentSnapshot doc) {
@@ -89,6 +95,9 @@ class Charger {
                 (data['connectorTypes'] as List).map((e) => e.toString()),
               )
               : const [],
+      address: data['address']?.toString(),
+      network: (data['network'] ?? data['source'])?.toString(),
+      status: availabilityStatus,
     );
   }
 }
