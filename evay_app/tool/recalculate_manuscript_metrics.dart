@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 void main() {
   // 15 Scenarios Data extracted directly from comparative_benchmark_45_scenarios_test.dart
   final scenarios = [

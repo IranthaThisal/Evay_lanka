@@ -239,10 +239,10 @@ class RaiSafetyHud extends StatelessWidget {
               if (report.pointOfNoReturn != null)
                 _Chip(
                   icon: Icons.replay_rounded,
-                  label: report.pointOfNoReturn!.isReturnSafe
+                  label: report.pointOfNoReturn!.isSafeToReturn
                       ? 'Return Verified Safe'
                       : 'PNR Alert @ ${report.pointOfNoReturn!.pointOfNoReturnKmFromOrigin.toStringAsFixed(0)}km',
-                  color: report.pointOfNoReturn!.isReturnSafe
+                  color: report.pointOfNoReturn!.isSafeToReturn
                       ? const Color(0xFF00C853)
                       : const Color(0xFFFF9100),
                 ),

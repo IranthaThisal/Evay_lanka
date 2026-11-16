@@ -372,26 +372,26 @@ void main() {
           '${(signD + (c.modelDPredictedKwh - c.measuredActualKwh).toStringAsFixed(2)).padLeft(6)} (${c.modelDPercentError.toStringAsFixed(1)}%)');
     }
 
-    final modelA_MAE = modelASumAbsErr / n;
-    final modelD_MAE = modelDSumAbsErr / n;
+    final modelAMae = modelASumAbsErr / n;
+    final modelDMae = modelDSumAbsErr / n;
 
-    final modelA_RMSE = math.sqrt(modelASumSqErr / n);
-    final modelD_RMSE = math.sqrt(modelDSumSqErr / n);
+    final modelARmse = math.sqrt(modelASumSqErr / n);
+    final modelDRmse = math.sqrt(modelDSumSqErr / n);
 
-    final modelA_MAPE = modelASumPctErr / n;
-    final modelD_MAPE = modelDSumPctErr / n;
+    final modelAMape = modelASumPctErr / n;
+    final modelDMape = modelDSumPctErr / n;
 
     print('========================================================================================================================');
     print('STATISTICAL SUMMARY ACROSS 8 EMPIRICAL JOURNEYS:');
-    print('  - Model A (Flat Baseline):     MAE = ${modelA_MAE.toStringAsFixed(2)} kWh | RMSE = ${modelA_RMSE.toStringAsFixed(2)} kWh | MAPE = ${modelA_MAPE.toStringAsFixed(1)}%');
-    print('  - Model D (EVayLanka Enhanced): MAE = ${modelD_MAE.toStringAsFixed(2)} kWh | RMSE = ${modelD_RMSE.toStringAsFixed(2)} kWh | MAPE = ${modelD_MAPE.toStringAsFixed(1)}%');
-    print('  - Error Reduction:             MAE reduced by ${((1 - modelD_MAE / modelA_MAE) * 100).toStringAsFixed(1)}% | RMSE reduced by ${((1 - modelD_RMSE / modelA_RMSE) * 100).toStringAsFixed(1)}% | MAPE reduced by ${((1 - modelD_MAPE / modelA_MAPE) * 100).toStringAsFixed(1)}%');
+    print('  - Model A (Flat Baseline):     MAE = ${modelAMae.toStringAsFixed(2)} kWh | RMSE = ${modelARmse.toStringAsFixed(2)} kWh | MAPE = ${modelAMape.toStringAsFixed(1)}%');
+    print('  - Model D (EVayLanka Enhanced): MAE = ${modelDMae.toStringAsFixed(2)} kWh | RMSE = ${modelDRmse.toStringAsFixed(2)} kWh | MAPE = ${modelDMape.toStringAsFixed(1)}%');
+    print('  - Error Reduction:             MAE reduced by ${((1 - modelDMae / modelAMae) * 100).toStringAsFixed(1)}% | RMSE reduced by ${((1 - modelDRmse / modelARmse) * 100).toStringAsFixed(1)}% | MAPE reduced by ${((1 - modelDMape / modelAMape) * 100).toStringAsFixed(1)}%');
     print('========================================================================================================================\n');
 
-    expect(modelD_MAE, lessThan(modelA_MAE));
-    expect(modelD_RMSE, lessThan(modelA_RMSE));
-    expect(modelD_MAPE, lessThan(modelA_MAPE));
-    expect(modelD_MAE, lessThan(1.50));
-    expect(modelD_MAPE, lessThan(12.0));
+    expect(modelDMae, lessThan(modelAMae));
+    expect(modelDRmse, lessThan(modelARmse));
+    expect(modelDMape, lessThan(modelAMape));
+    expect(modelDMae, lessThan(1.50));
+    expect(modelDMape, lessThan(12.0));
   });
 }

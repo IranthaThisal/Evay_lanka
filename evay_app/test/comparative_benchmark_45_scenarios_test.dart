@@ -4,7 +4,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:evay_app/models/charger.dart';
-import 'package:evay_app/models/smart_route.dart';
 import 'package:evay_app/services/smart_route_service.dart';
 
 class BenchmarkCorridor {

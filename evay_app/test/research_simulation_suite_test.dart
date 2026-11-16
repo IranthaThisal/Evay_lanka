@@ -1,11 +1,8 @@
-import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import 'package:evay_app/models/charger.dart';
 import 'package:evay_app/models/charger_checkin.dart';
 import 'package:evay_app/models/range_anxiety.dart';
-import 'package:evay_app/models/smart_route.dart';
 import 'package:evay_app/services/checkin_service.dart';
 import 'package:evay_app/services/smart_route_service.dart';
 
@@ -144,36 +141,37 @@ void main() {
         );
 
         // Model A: Flat Distance Only
-        final modelA_Kwh = corridor.roadDistanceKm * ratedEfficiencyKwhPerKm;
+        final modelAKwh = corridor.roadDistanceKm * ratedEfficiencyKwhPerKm;
 
         // Model B: Flat + Climate HVAC (1.05x)
-        final modelB_Kwh = corridor.roadDistanceKm * ratedEfficiencyKwhPerKm * 1.05;
+        final modelBKwh = corridor.roadDistanceKm * ratedEfficiencyKwhPerKm * 1.05;
 
         // Model C: Flat + Climate + Elevation / Regen
-        final modelC_Kwh = modelB_Kwh + elevationKwh;
+        final modelCKwh = modelBKwh + elevationKwh;
 
         // Model D: Full EVayLanka (Climate + Elevation + Heavy Monsoon + Payload)
         final effectiveRateD = ratedEfficiencyKwhPerKm * 1.05 * fullConditions.compositeEnvironmentalMultiplier;
-        final modelD_Kwh = (corridor.roadDistanceKm * effectiveRateD) + elevationKwh;
+        final modelDKwh = (corridor.roadDistanceKm * effectiveRateD) + elevationKwh;
 
-        final deltaKwh = modelD_Kwh - modelA_Kwh;
-        final deltaPercent = (deltaKwh / modelA_Kwh) * 100.0;
+        final deltaKwh = modelDKwh - modelAKwh;
+        final deltaPercent = (deltaKwh / modelAKwh) * 100.0;
 
         print('${corridor.name.padRight(35)} | '
-            '${modelA_Kwh.toStringAsFixed(2).padLeft(12)} | '
-            '${modelB_Kwh.toStringAsFixed(2).padLeft(12)} | '
-            '${modelC_Kwh.toStringAsFixed(2).padLeft(12)} | '
-            '${modelD_Kwh.toStringAsFixed(2).padLeft(12)} | '
+            '${modelAKwh.toStringAsFixed(2).padLeft(12)} | '
+            '${modelBKwh.toStringAsFixed(2).padLeft(12)} | '
+            '${modelCKwh.toStringAsFixed(2).padLeft(12)} | '
+            '${modelDKwh.toStringAsFixed(2).padLeft(12)} | '
             '+${deltaKwh.toStringAsFixed(2)} (+${deltaPercent.toStringAsFixed(1)}%)');
 
         // False Safe Check: Does Model A predict arrival on 40.24 kWh, while Model D exceeds capacity?
-        if (modelA_Kwh <= 40.24 && modelD_Kwh > 40.24) {
+        final usableEnergy = batteryCapacityKwh * 0.8;
+        if (modelAKwh <= usableEnergy && modelDKwh > usableEnergy) {
           falseSafePredictionsCount++;
           print('  ⚠️ [CRITICAL HAZARD DETECTED]: Model A predicts trip is safe without charging, '
-              'but Model D proves battery exhaustion (+${(modelD_Kwh - 40.24).toStringAsFixed(1)} kWh deficit)!');
+              'but Model D proves battery exhaustion (+${(modelDKwh - usableEnergy).toStringAsFixed(1)} kWh deficit)!');
         }
 
-        expect(modelD_Kwh, greaterThan(modelA_Kwh));
+        expect(modelDKwh, greaterThan(modelAKwh));
       }
       print('====================================================================================================');
       print('Total False-Safe Stranding Hazards Prevented by Enhanced Model: $falseSafePredictionsCount');

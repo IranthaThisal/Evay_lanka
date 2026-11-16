@@ -1,12 +1,9 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'package:evay_app/models/charger.dart';
 import 'package:evay_app/models/charger_checkin.dart';
 import 'package:evay_app/services/checkin_service.dart';
-import 'package:evay_app/services/smart_route_service.dart';
 import 'package:evay_app/services/booking_service.dart';
 
 /// Simulated In-Memory Transaction Engine replicating Firestore Atomic Operations
@@ -248,7 +245,7 @@ void main() {
           '${scoreB.toStringAsFixed(1).padLeft(16)} | '
           '${utilA.toStringAsFixed(3).padLeft(11)} | '
           '${utilB.toStringAsFixed(3).padLeft(11)} | '
-          '${chosen}');
+          '$chosen');
       expect(chosen, contains('Station A'));
 
       // T1: Grid Outage Injected at Station A (No power reported 15 mins ago)
@@ -273,7 +270,7 @@ void main() {
           '${scoreB.toStringAsFixed(1).padLeft(16)} | '
           '${utilA.toStringAsFixed(3).padLeft(11)} | '
           '${utilB.toStringAsFixed(3).padLeft(11)} | '
-          '${chosen}');
+          '$chosen');
       // Due to 4-hour recency penalty (0.6x clamp to <= 6.0), Station A score drops from 0.558 to 0.313, rerouting to Station B (0.498)
       expect(chosen, contains('Station B'));
       expect(scoreA, lessThanOrEqualTo(6.0));
@@ -303,7 +300,7 @@ void main() {
           '${scoreB.toStringAsFixed(1).padLeft(16)} | '
           '${utilA.toStringAsFixed(3).padLeft(11)} | '
           '${utilB.toStringAsFixed(3).padLeft(11)} | '
-          '${chosen}');
+          '$chosen');
       expect(chosen, contains('Station B'));
 
       // T3: 4.5 Hours Post-Outage (Penalty expires, grid restored, successful check-in verified)
@@ -342,7 +339,7 @@ void main() {
           '${scoreB.toStringAsFixed(1).padLeft(16)} | '
           '${utilA.toStringAsFixed(3).padLeft(11)} | '
           '${utilB.toStringAsFixed(3).padLeft(11)} | '
-          '${chosen}');
+          '$chosen');
       expect(chosen, contains('Station A'));
       expect(scoreA, greaterThanOrEqualTo(8.5));
 

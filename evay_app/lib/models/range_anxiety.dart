@@ -103,6 +103,7 @@ class PointOfNoReturnInfo {
   final String warningMessage;
 
   bool get isSafeToReturn => confidence == ReturnConfidence.safeReturn;
+  bool get isReturnSafe => isSafeToReturn;
 }
 
 class RangeAnxietyReport {

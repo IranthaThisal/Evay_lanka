@@ -1,8 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
-import '../theme/app_theme.dart';
 
 /// A futuristic glowing radial battery gauge for EVay Lanka.
 /// Features smooth gradient arc rendering, animated glowing sweep,
