@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
+import '../ui/ceb_tariff_card.dart';
+import '../ui/radial_battery_gauge.dart';
 
 class HomeDashboard extends StatefulWidget {
   const HomeDashboard({
@@ -137,7 +140,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                const CebTariffCard(),
+                const SizedBox(height: 8),
                 _VehicleStatusCard(
                   batteryPercent: batteryPercent,
                   estimatedRangeKm: estimatedRangeKm,
@@ -310,6 +315,19 @@ class _VehicleStatusCard extends StatelessWidget {
                 ),
               )
             else ...[
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: RadialBatteryGauge(
+                    batteryPercent: sliderValue,
+                    estimatedRangeKm: estimatedRangeKm,
+                    availableKwh: availableKwh,
+                    totalKwh: batteryKwh ?? 50.3,
+                    size: 190.0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -341,27 +359,11 @@ class _VehicleStatusCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: sliderValue / 100,
-                  minHeight: 8,
-                  backgroundColor: cs.surfaceContainerHighest,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    sliderValue >= 50
-                        ? cs.primary
-                        : sliderValue >= 25
-                        ? const Color(0xFFF59E0B)
-                        : cs.error,
-                  ),
-                ),
-              ),
               const SizedBox(height: 12),
               Row(
                 children: [
                   Text(
-                    'Current charge level',
+                    'Adjust current SoC',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -382,8 +384,14 @@ class _VehicleStatusCard extends StatelessWidget {
                 max: 100,
                 divisions: 100,
                 label: '${sliderValue.round()}%',
-                onChanged: onBatteryPercentChanged,
-                onChangeEnd: onBatteryPercentChangeEnd,
+                onChanged: (val) {
+                  HapticFeedback.selectionClick();
+                  onBatteryPercentChanged(val);
+                },
+                onChangeEnd: (val) {
+                  HapticFeedback.mediumImpact();
+                  onBatteryPercentChangeEnd(val);
+                },
               ),
               Container(
                 width: double.infinity,

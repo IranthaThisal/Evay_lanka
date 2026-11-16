@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/simulation_service.dart';
 import '../theme/app_theme.dart';
+import '../ui/ceb_tariff_card.dart';
 
 class ChargeScreen extends StatefulWidget {
   const ChargeScreen({super.key});
@@ -232,7 +233,9 @@ class _ChargeScreenState extends State<ChargeScreen>
                     .clamp(0.0, double.infinity)
                     .toDouble(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          const CebTariffCard(),
+          const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,

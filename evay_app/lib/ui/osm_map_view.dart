@@ -478,6 +478,7 @@ class _OsmMapViewState extends State<OsmMapView>
               color: pinColor,
               isDestination: isDestination,
               isSelected: isSelected,
+              isRecommended: isRecommended,
             ),
           ),
         ),
@@ -578,17 +579,38 @@ class _MapPinIcon extends StatelessWidget {
     required this.color,
     required this.isDestination,
     required this.isSelected,
+    this.isRecommended = false,
   });
 
   final Color color;
   final bool isDestination;
   final bool isSelected;
+  final bool isRecommended;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       alignment: Alignment.topCenter,
       children: [
+        // Recommended Stop Glowing Halo Ring
+        if (isRecommended)
+          Positioned(
+            top: 2,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00E676).withValues(alpha: 0.5),
+                    blurRadius: 10,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
         // Drop shadow at pin tip
         Positioned(
           bottom: 1,
@@ -604,7 +626,7 @@ class _MapPinIcon extends StatelessWidget {
         // Pin body
         Icon(
           Icons.location_on,
-          size: isSelected ? 40 : 34,
+          size: isSelected ? 40 : (isRecommended ? 37 : 34),
           color: color,
           shadows: const [
             Shadow(
@@ -616,7 +638,7 @@ class _MapPinIcon extends StatelessWidget {
         ),
         // Inner badge icon
         Positioned(
-          top: isSelected ? 7 : 6,
+          top: isSelected ? 7 : (isRecommended ? 6.5 : 6),
           child: Container(
             width: isSelected ? 16 : 14,
             height: isSelected ? 16 : 14,
@@ -625,7 +647,9 @@ class _MapPinIcon extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isDestination ? Icons.flag_rounded : Icons.bolt_rounded,
+              isDestination
+                  ? Icons.flag_rounded
+                  : (isRecommended ? Icons.star_rounded : Icons.bolt_rounded),
               size: isSelected ? 13 : 11,
               color: color,
             ),

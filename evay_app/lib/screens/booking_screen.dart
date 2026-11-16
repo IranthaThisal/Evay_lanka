@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/booking.dart';
 import '../models/charger.dart';
 import '../services/booking_service.dart';
 import '../theme/app_theme.dart';
+import '../ui/ceb_tariff_card.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key, required this.charger});
@@ -468,6 +470,7 @@ class _BookingScreenState extends State<BookingScreen> {
                           divisions: 16,
                           label: '${_currentBatteryPercent.toInt()}%',
                           onChanged: (val) {
+                            HapticFeedback.selectionClick();
                             setState(() {
                               _currentBatteryPercent = val;
                               _calculateRecommendation();
@@ -481,7 +484,9 @@ class _BookingScreenState extends State<BookingScreen> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            const CebTariffCard(),
+            const SizedBox(height: 8),
 
             /// DATE + DURATION
             Column(

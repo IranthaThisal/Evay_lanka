@@ -18,7 +18,9 @@ import '../services/range_anxiety_service.dart';
 import '../services/route_service.dart';
 import '../services/smart_route_service.dart';
 import '../theme/app_theme.dart';
+import '../ui/elevation_profile_hud.dart';
 import '../ui/osm_map_view.dart';
+import '../ui/rai_safety_hud.dart';
 import 'booking_screen.dart';
 import 'checkin_dialog.dart';
 
@@ -570,6 +572,24 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildRaiCard(RangeAnxietyReport report) {
+    if (_activeSmartRoute != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RaiSafetyHud(
+            report: report,
+            route: _activeSmartRoute!,
+          ),
+          ElevationProfileHud(
+            routePoints: _activeSmartRoute!.routePoints,
+            elevationGainM: _activeSmartRoute!.totalElevationGainM,
+            elevationLossM: _activeSmartRoute!.totalElevationLossM,
+            elevationEnergyPenaltyKwh: _activeSmartRoute!.elevationEnergyPenaltyKwh,
+          ),
+        ],
+      );
+    }
+
     final tone = _raiColor(report.score);
     final stop = report.recommendedStop;
 
