@@ -282,17 +282,21 @@ class _OsmMapViewState extends State<OsmMapView>
                 clipBehavior: Clip.hardEdge,
                 children: [
                   // 1. OpenStreetMap / Carto Tile Layer
-                  _buildTileLayer(size),
+                  RepaintBoundary(
+                    child: _buildTileLayer(size),
+                  ),
 
                   // 2. Route Polylines & Current Location Circle Layer
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _MapVectorPainter(
-                        polylines: widget.polylines,
-                        circles: widget.circles,
-                        latLngToScreen: (pt) => _latLngToScreen(pt, size),
-                        zoom: _zoom,
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        size: size,
+                        painter: _MapVectorPainter(
+                          polylines: widget.polylines,
+                          circles: widget.circles,
+                          latLngToScreen: (pt) => _latLngToScreen(pt, size),
+                          zoom: _zoom,
+                        ),
                       ),
                     ),
                   ),

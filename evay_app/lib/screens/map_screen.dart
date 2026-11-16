@@ -19,6 +19,9 @@ import '../services/route_service.dart';
 import '../services/smart_route_service.dart';
 import '../theme/app_theme.dart';
 import '../ui/elevation_profile_hud.dart';
+import '../ui/map/charger_card.dart';
+import '../ui/map/charger_filter_sheet.dart';
+import '../ui/map/map_mode_selector.dart';
 import '../ui/osm_map_view.dart';
 import '../ui/rai_safety_hud.dart';
 import 'booking_screen.dart';
@@ -262,14 +265,19 @@ class _MapScreenState extends State<MapScreen> {
                       : const SizedBox.shrink(key: ValueKey('hidden-planner')),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _modeChip(l10n.t('nearby'), 'nearby')),
-                const SizedBox(width: 8),
-                Expanded(child: _modeChip(l10n.t('onRoute'), 'route')),
-                const SizedBox(width: 8),
-                Expanded(child: _modeChip(l10n.t('allChargers'), 'all')),
+            MapModeSelector(
+              currentMode: _chargerMode,
+              onModeSelected: (mode) => setState(() => _chargerMode = mode),
+              items: [
+                MapModeItem(label: l10n.t('nearby'), value: 'nearby'),
+                MapModeItem(label: l10n.t('onRoute'), value: 'route'),
+                MapModeItem(label: l10n.t('allChargers'), value: 'all'),
               ],
+              accentColor: _accent,
+              panelColor: _panel,
+              panelBorderColor: _panelBorder,
+              selectedTextColor: _buttonOnAccent,
+              unselectedTextColor: _onPanel,
             ),
           ],
         ),
@@ -1060,7 +1068,20 @@ class _MapScreenState extends State<MapScreen> {
                             itemBuilder: (context, index) {
                               final charger = chargers[index];
                               final meta = _chargerMeta(charger);
-                              return _chargerCard(charger, meta);
+                              return ChargerCard(
+                                charger: charger,
+                                meta: meta,
+                                onDirections: () => _showRouteToCharger(charger),
+                                onDetails: () => _openChargerSheet(charger),
+                                panelColor: _panel,
+                                onPanelColor: _onPanel,
+                                onPanelMutedColor: _onPanelMuted,
+                                panelSoftColor: _panelSoft,
+                                accentColor: _accent,
+                                buttonOnAccentColor: _buttonOnAccent,
+                                goodColor: _good,
+                                isLight: _isLight,
+                              );
                             },
                           ),
                         ),
@@ -1071,107 +1092,6 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _chargerCard(Charger charger, String meta) {
-    return Container(
-      width: 245,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _panel,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    charger.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ).copyWith(color: _onPanel),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    charger.city.isEmpty
-                        ? context.l10n.t('sriLanka')
-                        : charger.city,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: _onPanelMuted),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _metricChip(context.l10n.slotsCount(charger.slots)),
-                      if (charger.powerKw != null)
-                        _metricChip(
-                          '${charger.powerKw!.toStringAsFixed(0)} kW',
-                        ),
-                      if (charger.connectorTypes.isNotEmpty)
-                        _metricChip(charger.connectorTypes.first),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            meta,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _good,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => _showRouteToCharger(charger),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _isLight ? _accent : Colors.white,
-                    foregroundColor:
-                        _isLight ? _buttonOnAccent : const Color(0xFF08141D),
-                    minimumSize: const Size(0, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: Text(context.l10n.t('directions')),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 42,
-                height: 42,
-                child: IconButton(
-                  onPressed: () => _openChargerSheet(charger),
-                  style: IconButton.styleFrom(
-                    backgroundColor: _panelSoft,
-                    foregroundColor: _onPanel,
-                  ),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.ev_station, size: 20),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -1206,43 +1126,6 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
       child: child,
-    );
-  }
-
-  Widget _modeChip(String label, String value) {
-    final selected = _chargerMode == value;
-    return GestureDetector(
-      onTap: () {
-        if (_chargerMode != value) {
-          setState(() => _chargerMode = value);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: selected ? _accent : _panel,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? Colors.transparent : _panelBorder,
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x18000000),
-              blurRadius: 8,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: selected ? _buttonOnAccent : _onPanel,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          ),
-        ),
-      ),
     );
   }
 
@@ -1760,119 +1643,19 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _openFilterSheet(List<String> connectors) async {
-    final result = await showModalBottomSheet<_FilterDraft>(
+    final result = await ChargerFilterSheet.show(
       context: context,
-      backgroundColor: _panel,
-      showDragHandle: true,
-      builder: (context) {
-        bool availableOnly = _availableOnly;
-        double minPower = _minPowerKw;
-        final selected = {..._selectedConnectors};
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Filter Chargers',
-                    style: TextStyle(
-                      color: _onPanel,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SwitchListTile.adaptive(
-                    value: availableOnly,
-                    activeColor: _good,
-                    title: Text(
-                      'Available slots only',
-                      style: TextStyle(color: _onPanel),
-                    ),
-                    onChanged: (value) {
-                      setModalState(() => availableOnly = value);
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Minimum power: ${minPower.round()} kW',
-                    style: TextStyle(color: _onPanelMuted),
-                  ),
-                  Slider(
-                    value: minPower,
-                    min: 0,
-                    max: 350,
-                    divisions: 14,
-                    activeColor: _accent,
-                    label: '${minPower.round()} kW',
-                    onChanged: (value) {
-                      setModalState(() => minPower = value);
-                    },
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Connector Types',
-                    style: TextStyle(color: _onPanelMuted),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        connectors.map((connector) {
-                          final selectedNow = selected.contains(connector);
-                          return FilterChip(
-                            selected: selectedNow,
-                            label: Text(connector),
-                            labelStyle: TextStyle(
-                              color: selectedNow ? _buttonOnAccent : _onPanel,
-                            ),
-                            selectedColor: _accent,
-                            backgroundColor: _panelSoft,
-                            checkmarkColor: _buttonOnAccent,
-                            onSelected: (value) {
-                              setModalState(() {
-                                if (value) {
-                                  selected.add(connector);
-                                } else {
-                                  selected.remove(connector);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () {
-                        Navigator.pop(
-                          context,
-                          _FilterDraft(
-                            availableOnly: availableOnly,
-                            minPowerKw: minPower,
-                            selectedConnectors: selected,
-                          ),
-                        );
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _accent,
-                        foregroundColor: _buttonOnAccent,
-                      ),
-                      child: const Text('Apply Filters'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      availableOnly: _availableOnly,
+      minPowerKw: _minPowerKw,
+      selectedConnectors: _selectedConnectors,
+      allConnectors: connectors,
+      panelColor: _panel,
+      onPanelColor: _onPanel,
+      onPanelMutedColor: _onPanelMuted,
+      panelSoftColor: _panelSoft,
+      accentColor: _accent,
+      buttonOnAccentColor: _buttonOnAccent,
+      goodColor: _good,
     );
 
     if (result == null) return;
@@ -2088,16 +1871,4 @@ class _MapScreenState extends State<MapScreen> {
         ) /
         1000;
   }
-}
-
-class _FilterDraft {
-  const _FilterDraft({
-    required this.availableOnly,
-    required this.minPowerKw,
-    required this.selectedConnectors,
-  });
-
-  final bool availableOnly;
-  final double minPowerKw;
-  final Set<String> selectedConnectors;
 }
