@@ -4,8 +4,8 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.29.2-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.7.2-0175C2?logo=dart)](https://dart.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore-FFCA28?logo=firebase)](https://firebase.google.com)
-[![Conference Target](https://img.shields.io/badge/Conference-ICACT%202026-blueviolet)](https://icact.org)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready%20%28PASS%29-brightgreen)](#conference-verification--benchmark-reproducibility)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
 **EVay Lanka** is an autonomous, mobile-first EV ecosystem and route navigation platform engineered specifically for the distinct geographical, electrical, and infrastructure landscape of **Sri Lanka**. 
 
@@ -24,7 +24,7 @@ It addresses range anxiety through physics-informed highland elevation modeling,
 ### 2. 🛣️ Multi-Hop Corridor Route Optimization & Reserve Floor
 * **Normalized Pareto Cost Function**:
   $$\text{Cost}(r) = \alpha \frac{D}{D_{\max}} + \beta \frac{E}{E_{\max}} + \gamma \frac{C}{C_{\max}}$$
-  Calibrated with conference-verified weights: $\alpha = 0.35$ (Detour), $\beta = 0.45$ (Power/Energy), $\gamma = 0.20$ (Queue Delay).
+  Calibrated with empirical multi-criteria weights: $\alpha = 0.35$ (Detour), $\beta = 0.45$ (Power/Energy), $\gamma = 0.20$ (Queue Delay).
 * **Strict 10% Reserve Floor Enforcement**: Mandatory pre-departure veto if projected arrival SoC drops below the 10.0% safety threshold.
 * **Sequential Multi-Stop Insertion**: Proactively schedules charging stops when SoC approaches the critical 15–20% buffer.
 * **Alternative Charger Comparison**: Evaluates and allows swapping with runner-up corridor chargers (e.g., swapping an L2 stop for a 50 kW DC Fast Charger).
@@ -106,28 +106,26 @@ evay_app/
 │       ├── radial_battery_gauge.dart      # Radial battery visualizer
 │       ├── rai_safety_hud.dart            # Pre-departure safety reserve HUD
 │       └── map/                           # Charger cards and filter sheets
-├── test/
-│   ├── algorithm_verification_test.dart   # 7 core mathematical & algorithmic pillars
-│   ├── comparative_benchmark_45_scenarios_test.dart  # 45 corridor scenarios (C1–C5)
-│   ├── research_simulation_suite_test.dart# Monte Carlo stochastic simulation
-│   └── safety_enforcement_rejection_test.dart        # C3 pre-departure veto tests
-└── EMULATOR_VERIFICATION_REPORT.md        # Full Android 16 live verification report
+└── test/
+    ├── algorithm_verification_test.dart   # 7 core mathematical & algorithmic pillars
+    ├── comparative_benchmark_45_scenarios_test.dart  # 45 corridor scenarios (C1–C5)
+    ├── research_simulation_suite_test.dart# Monte Carlo stochastic simulation
+    └── safety_enforcement_rejection_test.dart        # Pre-departure veto & reserve tests
 ```
 
 ---
 
-## 🧪 Conference Verification & Benchmark Reproducibility
+## 🧪 Testing & Verification Suite
 
-Targeted for the **28th International Conference on Advanced Communications Technology (ICACT 2026)**.
+The repository includes comprehensive automated test suites verifying routing mathematics, battery physics, and station concurrency:
 
-| Metric / Item | Status | Verification Detail |
-| :--- | :---: | :--- |
-| **Android 16 Emulator Run** | **PASS** | Evaluated on Pixel 9 (`emulator-5554`, Android 16 API 36). |
-| **End-to-End Corridor C3** | **PASS** | Colombo $\rightarrow$ Nuwara Eliya (158 km, +1502m climb). Detected reserve exhaustion at 30% initial SoC and inserted mitigation stop for safe arrival at 21.2% SoC. |
-| **Pre-Departure Veto** | **PASS** | Unassisted 80% SoC C3 trip strictly arrives at **6.5% SoC** ($< 10\%$ floor), triggering mandatory departure **VETO**. |
-| **Unit & Benchmark Suite** | **PASS** | 16 test suites passing (Pareto weights, elevation physics, Monte Carlo queueing). |
-
-Refer to [EMULATOR_VERIFICATION_REPORT.md](EMULATOR_VERIFICATION_REPORT.md) for full benchmark tables, formulas, and screenshots.
+| Test Group | Scope |
+| :--- | :--- |
+| **Algorithmic Verification** | Validates the Pareto routing cost function, multi-stop insertion, and connector compatibility filtering. |
+| **Corridor Benchmarks** | Evaluates 45 real-world corridor scenarios (e.g., Colombo $\rightarrow$ Nuwara Eliya, Colombo $\rightarrow$ Galle, Kandy $\rightarrow$ Ella) across diverse initial SoCs. |
+| **Topography & Elevation Physics** | Verifies gravitational potential energy formulas, highland climb penalties, and downhill regenerative braking recovery. |
+| **Safety Reserve Floor** | Enforces the 10.0% battery reserve rule and pre-departure veto mechanisms. |
+| **Booking & Concurrency** | Tests transactional slot reservation locks, time-window slot holding, and waitlist alerting. |
 
 ---
 
