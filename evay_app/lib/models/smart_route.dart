@@ -14,6 +14,7 @@ class ChargingStop {
     this.chargingTimeMinutes = 30.0,
     this.energyAddedKwh = 20.0,
     this.elevationM = 0.0,
+    this.alternatives = const [],
   });
 
   final Charger charger;
@@ -26,6 +27,11 @@ class ChargingStop {
   final double chargingTimeMinutes;
   final double energyAddedKwh;
   final double elevationM;
+  final List<ChargingStop> alternatives;
+
+  /// Estimated driving minutes from origin to reach this charging stop (assuming ~52 km/h corridor average).
+  int get estimatedDriveMinutesFromOrigin =>
+      (distanceFromOriginKm / 52.0 * 60.0).round().clamp(5, 600);
 }
 
 class SmartRoute {
@@ -46,6 +52,7 @@ class SmartRoute {
     this.elevationEnergyPenaltyKwh = 0.0,
     this.isFeasible = true,
     this.hasReserveViolation = false,
+    this.includeReturnTrip = false,
   }) : _stopsByChargerId = {
          for (final stop in chargingStops) stop.charger.id: stop,
        };
@@ -66,15 +73,65 @@ class SmartRoute {
   final double elevationEnergyPenaltyKwh;
   final bool isFeasible;
   final bool hasReserveViolation;
+  final bool includeReturnTrip;
 
   final Map<String, ChargingStop> _stopsByChargerId;
 
   bool get hasChargingStops => chargingStops.isNotEmpty;
   int get stopsCount => chargingStops.length;
 
+  /// Total energy injected across all planned corridor charging stops (kWh).
+  double get totalEnergyInjectedKwh => chargingStops.fold(
+    0.0,
+    (sum, stop) => sum + stop.energyAddedKwh,
+  );
+
+  /// Estimated total energy cost (LKR) at the given CEB tariff rate (LKR/kWh).
+  double estimatedTripCostLkr(double ratePerKwh) =>
+      totalEnergyConsumedKwh.clamp(0.0, 500.0) * ratePerKwh;
+
+  /// Potential savings (LKR) when charging total trip energy during CEB Off-Peak (LKR 25/kWh) vs Peak (LKR 65/kWh).
+  double get offPeakSavingsVsPeakLkr =>
+      totalEnergyConsumedKwh.clamp(0.0, 500.0) * (65.0 - 25.0);
+
   /// Whether the route is safe for immediate navigation guidance without battery exhaustion.
   bool get canInitiateNavigation => isFeasible && !hasReserveViolation;
 
   /// O(1) lookup for whether a charger is a planned stop along this route.
   ChargingStop? stopForCharger(String chargerId) => _stopsByChargerId[chargerId];
+
+  /// Returns a new SmartRoute with the stop at [stopOrder] swapped with [replacement].
+  SmartRoute withSwappedStop({
+    required int stopOrder,
+    required ChargingStop replacement,
+  }) {
+    final updatedStops = [
+      for (final s in chargingStops)
+        if (s.stopOrder == stopOrder) replacement else s,
+    ];
+    final updatedChargingTime = updatedStops.fold(
+      0.0,
+      (sum, s) => sum + s.chargingTimeMinutes,
+    );
+
+    return SmartRoute(
+      origin: origin,
+      destination: destination,
+      routePoints: routePoints,
+      bounds: bounds,
+      distanceText: distanceText,
+      durationText: durationText,
+      chargingStops: updatedStops,
+      totalDistanceKm: totalDistanceKm,
+      totalElevationGainM: totalElevationGainM,
+      totalElevationLossM: totalElevationLossM,
+      arrivalBatteryPercent: arrivalBatteryPercent,
+      totalChargingTimeMinutes: updatedChargingTime,
+      totalEnergyConsumedKwh: totalEnergyConsumedKwh,
+      elevationEnergyPenaltyKwh: elevationEnergyPenaltyKwh,
+      isFeasible: isFeasible,
+      hasReserveViolation: hasReserveViolation,
+      includeReturnTrip: includeReturnTrip,
+    );
+  }
 }

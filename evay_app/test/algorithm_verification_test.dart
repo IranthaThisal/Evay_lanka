@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import 'package:evay_app/models/charger.dart';
 import 'package:evay_app/models/charger_checkin.dart';
+import 'package:evay_app/models/ev_preset.dart';
 import 'package:evay_app/models/range_anxiety.dart';
 import 'package:evay_app/models/smart_route.dart';
 import 'package:evay_app/services/booking_service.dart';
@@ -273,6 +275,141 @@ void main() {
         stationPowerKw: 50.0,
       );
       expect(minTopUp, equals(15));
+    });
+  });
+
+  group('Pillar 7: Connector Filtering, EV Presets, Alternative Swaps & Active Slot Checks', () {
+    test('EV Presets & Connector Compatibility Filtering', () {
+      expect(kSriLankaEvPresets, isNotEmpty);
+      final leaf = kSriLankaEvPresets.firstWhere((p) => p.id == 'nissan_leaf_40');
+      expect(leaf.connectors, contains('CHAdeMO'));
+
+      const ccsOnlyCharger = Charger(
+        id: 'c_ccs',
+        name: 'CCS Fast Hub',
+        city: 'Colombo',
+        lat: 6.92,
+        lng: 79.86,
+        slots: 2,
+        powerKw: 50,
+        connectorTypes: ['CCS2'],
+      );
+      const chademoCharger = Charger(
+        id: 'c_chademo',
+        name: 'CHAdeMO Hub',
+        city: 'Colombo',
+        lat: 6.93,
+        lng: 79.87,
+        slots: 2,
+        powerKw: 50,
+        connectorTypes: ['CHAdeMO'],
+      );
+
+      expect(
+        SmartRouteService.isChargerConnectorCompatible(ccsOnlyCharger, {'CHAdeMO'}),
+        isFalse,
+      );
+      expect(
+        SmartRouteService.isChargerConnectorCompatible(chademoCharger, {'CHAdeMO'}),
+        isTrue,
+      );
+    });
+
+    test('Alternative Stop Swapping & CEB Trip Cost Optimizer', () {
+      const primaryCharger = Charger(
+        id: 'c1',
+        name: 'Slow L2 Charger',
+        city: 'Homagama',
+        lat: 6.84,
+        lng: 80.00,
+        slots: 1,
+        powerKw: 6.6,
+        connectorTypes: ['Type 2'],
+      );
+      const fastAltCharger = Charger(
+        id: 'c2',
+        name: 'Fast DC Charger',
+        city: 'Avissawella',
+        lat: 6.95,
+        lng: 80.21,
+        slots: 2,
+        powerKw: 50.0,
+        connectorTypes: ['CCS2'],
+      );
+
+      const altStop = ChargingStop(
+        charger: fastAltCharger,
+        distanceFromRouteKm: 2.4,
+        distanceFromOriginKm: 42.0,
+        score: 0.78,
+        stopOrder: 1,
+        chargingTimeMinutes: 32.0,
+        energyAddedKwh: 24.0,
+      );
+      const primaryStop = ChargingStop(
+        charger: primaryCharger,
+        distanceFromRouteKm: 1.2,
+        distanceFromOriginKm: 25.0,
+        score: 0.81,
+        stopOrder: 1,
+        chargingTimeMinutes: 195.0,
+        energyAddedKwh: 24.0,
+        alternatives: [altStop],
+      );
+
+      final route = SmartRoute(
+        origin: const LatLng(6.9271, 79.8612),
+        destination: const LatLng(6.9497, 80.7891),
+        routePoints: const [LatLng(6.9271, 79.8612), LatLng(6.9497, 80.7891)],
+        bounds: LatLngBounds(
+          southwest: const LatLng(6.9271, 79.8612),
+          northeast: const LatLng(6.9497, 80.7891),
+        ),
+        distanceText: '158.0 km',
+        durationText: '3 hrs 3 mins',
+        chargingStops: const [primaryStop],
+        totalChargingTimeMinutes: 195.0,
+        totalEnergyConsumedKwh: 34.2,
+      );
+
+      expect(route.estimatedTripCostLkr(25.0), closeTo(855.0, 0.1));
+      expect(route.offPeakSavingsVsPeakLkr, closeTo(34.2 * 40.0, 0.1));
+
+      final swapped = route.withSwappedStop(stopOrder: 1, replacement: altStop);
+      expect(swapped.chargingStops.first.charger.id, equals('c2'));
+      expect(swapped.totalChargingTimeMinutes, equals(32.0));
+    });
+
+    test('Time-Window Active Slot Hold Ignores Expired or Cancelled Bookings', () {
+      final now = DateTime(2026, 11, 17, 14, 0);
+      final slotStart = DateTime(2026, 11, 17, 13, 30);
+      final slotEnd = DateTime(2026, 11, 17, 14, 30);
+
+      // Expired booking (ended at 13:45, before referenceNow 14:00)
+      expect(
+        BookingService.isBookingActivelyHoldingSlot(
+          status: 'booked',
+          bookedStart: DateTime(2026, 11, 17, 13, 15),
+          bookedEnd: DateTime(2026, 11, 17, 13, 45),
+          slotStart: slotStart,
+          slotEnd: slotEnd,
+          referenceNow: now,
+        ),
+        isFalse,
+      );
+
+      // Active overlapping booking (ends at 14:15, after referenceNow 14:00)
+      expect(
+        BookingService.isBookingActivelyHoldingSlot(
+          status: 'booked',
+          bookedStart: DateTime(2026, 11, 17, 13, 45),
+          bookedEnd: DateTime(2026, 11, 17, 14, 15),
+          slotStart: slotStart,
+          slotEnd: slotEnd,
+          referenceNow: now,
+        ),
+        isTrue,
+      );
     });
   });
 }

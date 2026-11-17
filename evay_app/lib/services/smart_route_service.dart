@@ -15,7 +15,8 @@ export 'topography/elevation_model.dart';
 
 /// Smart Route Service:
 /// Supports Multi-Stop Corridor Planning, Sri Lanka Topography & Elevation Modeling,
-/// Spatial Bounding-Box Indexing, and Crowdsourced Station Reliability ("LankaScore").
+/// Spatial Bounding-Box Indexing, Connector-Type Filtering, Round-Trip Return Simulation,
+/// and Crowdsourced Station Reliability ("LankaScore").
 class SmartRouteService {
   SmartRouteService({
     RouteService? routeService,
@@ -45,6 +46,30 @@ class SmartRouteService {
     return true;
   }
 
+  /// Checks whether a charger is compatible with the vehicle's preferred connector types.
+  static bool isChargerConnectorCompatible(
+    Charger charger,
+    Set<String> preferredConnectors,
+  ) {
+    if (preferredConnectors.isEmpty || charger.connectorTypes.isEmpty) {
+      return true;
+    }
+    final normalizedPreferred = preferredConnectors
+        .map((c) => c.trim().toUpperCase())
+        .where((c) => c.isNotEmpty)
+        .toSet();
+    if (normalizedPreferred.isEmpty) return true;
+
+    for (final raw in charger.connectorTypes) {
+      final upper = raw.trim().toUpperCase();
+      if (normalizedPreferred.contains(upper)) return true;
+      for (final pref in normalizedPreferred) {
+        if (upper.contains(pref) || pref.contains(upper)) return true;
+      }
+    }
+    return false;
+  }
+
   final RouteService _routeService;
   final SriLankaElevationModel _elevationModel;
 
@@ -62,13 +87,25 @@ class SmartRouteService {
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
+    Set<String> preferredConnectors = const {},
+    bool includeReturnTrip = false,
   }) async {
     final route = await _routeService.fetchRoute(
       origin: origin,
       destination: destination,
     );
 
-    final points = route.points;
+    final basePoints = route.points;
+    final List<LatLng> points;
+    if (includeReturnTrip && basePoints.length > 1) {
+      points = [
+        ...basePoints,
+        ...basePoints.reversed.skip(1),
+      ];
+    } else {
+      points = basePoints;
+    }
+
     final n = points.length;
     final cumulativeDistances = List<double>.filled(n, 0.0);
     final elevations = List<double>.filled(n, 0.0);
@@ -106,6 +143,7 @@ class SmartRouteService {
       climateFactor: climateFactor,
       reserveThresholdPercent: reserveThresholdPercent,
       targetChargePercent: targetChargePercent,
+      preferredConnectors: preferredConnectors,
       precomputedDistances: cumulativeDistances,
       precomputedElevations: elevations,
     );
@@ -128,13 +166,20 @@ class SmartRouteService {
     final hasReserveViolation = arrivalSocPercent < reserveThresholdPercent;
     final isFeasible = !hasReserveViolation;
 
+    final distanceLabel = includeReturnTrip
+        ? '${totalTripDist.toStringAsFixed(1)} km (Round Trip)'
+        : route.distanceText;
+    final durationLabel = includeReturnTrip
+        ? '${route.durationText} × 2'
+        : route.durationText;
+
     return SmartRoute(
       origin: origin,
       destination: destination,
       routePoints: points,
       bounds: route.bounds,
-      distanceText: route.distanceText,
-      durationText: route.durationText,
+      distanceText: distanceLabel,
+      durationText: durationLabel,
       chargingStops: stops,
       totalDistanceKm: totalTripDist,
       totalElevationGainM: gainM,
@@ -145,6 +190,7 @@ class SmartRouteService {
       elevationEnergyPenaltyKwh: elevationEnergyPenaltyKwh,
       isFeasible: isFeasible,
       hasReserveViolation: hasReserveViolation,
+      includeReturnTrip: includeReturnTrip,
     );
   }
 
@@ -166,15 +212,24 @@ class SmartRouteService {
     double climateFactor = defaultClimateFactor,
     double reserveThresholdPercent = 18.0,
     double targetChargePercent = 80.0,
+    Set<String> preferredConnectors = const {},
     List<double>? precomputedDistances,
     List<double>? precomputedElevations,
   }) {
     if (routePoints.isEmpty || chargers.isEmpty) return const [];
 
+    // Filter by vehicle connector compatibility if specified (fallback to all if none match)
+    final compatibleChargers = preferredConnectors.isEmpty
+        ? chargers
+        : chargers
+            .where((c) => isChargerConnectorCompatible(c, preferredConnectors))
+            .toList(growable: false);
+    final pool = compatibleChargers.isNotEmpty ? compatibleChargers : chargers;
+
     // Step 1: Spatial Bounding-Box Pre-filtering
     final effectiveBounds = routeBounds ?? _calculateBounds(routePoints);
     final corridorChargers = SpatialChargerIndex.filterByRouteEnvelope(
-      chargers: chargers,
+      chargers: pool,
       bounds: effectiveBounds,
       marginKm: maxDistanceFromRouteKm,
     );
@@ -277,11 +332,8 @@ class SmartRouteService {
         }
 
         if (candidateMap.isNotEmpty) {
-          // Score candidate chargers using normalized multi-criteria function + LankaScore
-          Charger? bestCharger;
-          double bestScore = -1.0;
-          double bestDetourKm = double.infinity;
-          int bestWpIndex = i;
+          // Score all candidate chargers and rank them for primary + alternative carousel
+          final scoredCandidates = <(Charger, double, int, double)>[];
 
           for (final entry in candidateMap.values) {
             final charger = entry.$1;
@@ -299,40 +351,58 @@ class SmartRouteService {
               reliabilityScore: reliability,
             );
 
-            if (score > bestScore) {
-              bestScore = score;
-              bestCharger = charger;
-              bestDetourKm = detourKm;
-              bestWpIndex = wpIdx;
-            }
+            scoredCandidates.add((charger, detourKm, wpIdx, score));
           }
 
-          if (bestCharger != null) {
+          scoredCandidates.sort((a, b) => b.$4.compareTo(a.$4));
+
+          if (scoredCandidates.isNotEmpty) {
             final arrivalSoc = currentSocPercent.clamp(8.0, 35.0);
             final targetSoc = targetChargePercent.clamp(60.0, 90.0);
             final energyNeededKwh =
                 ((targetSoc - arrivalSoc) / 100.0) * capacity;
-            final chargerPower = (bestCharger.powerKw ?? 30.0).clamp(10.0, 150.0);
+            final nextStopOrder = stops.length + 1;
 
-            // Standard DC Fast Charger taper curve efficiency (eta ~0.90)
-            final chargingTimeMinutes =
-                (energyNeededKwh / (chargerPower * 0.90)) * 60.0;
+            ChargingStop buildStopFromTuple(
+              (Charger, double, int, double) item, {
+              List<ChargingStop> alternatives = const [],
+            }) {
+              final c = item.$1;
+              final detourKm = item.$2;
+              final wpIdx = item.$3;
+              final sc = item.$4;
+              final chargerPower = (c.powerKw ?? 30.0).clamp(10.0, 150.0);
+              final chargingTimeMinutes =
+                  (energyNeededKwh / (chargerPower * 0.90)) * 60.0;
+              return ChargingStop(
+                charger: c,
+                distanceFromRouteKm: detourKm,
+                distanceFromOriginKm: cumulativeDistances[wpIdx],
+                score: sc,
+                stopOrder: nextStopOrder,
+                arrivalSocPercent: arrivalSoc,
+                targetSocPercent: targetSoc,
+                chargingTimeMinutes: chargingTimeMinutes,
+                energyAddedKwh: energyNeededKwh,
+                elevationM: elevations[wpIdx],
+                alternatives: alternatives,
+              );
+            }
 
-            final stop = ChargingStop(
-              charger: bestCharger,
-              distanceFromRouteKm: bestDetourKm,
-              distanceFromOriginKm: cumulativeDistances[bestWpIndex],
-              score: bestScore,
-              stopOrder: stops.length + 1,
-              arrivalSocPercent: arrivalSoc,
-              targetSocPercent: targetSoc,
-              chargingTimeMinutes: chargingTimeMinutes,
-              energyAddedKwh: energyNeededKwh,
-              elevationM: elevations[bestWpIndex],
+            final altList = scoredCandidates
+                .skip(1)
+                .take(3)
+                .map((alt) => buildStopFromTuple(alt))
+                .toList(growable: false);
+
+            final bestTuple = scoredCandidates.first;
+            final stop = buildStopFromTuple(
+              bestTuple,
+              alternatives: altList,
             );
 
             stops.add(stop);
-            visitedChargerIds.add(bestCharger.id);
+            visitedChargerIds.add(bestTuple.$1.id);
 
             // EV recharged to target SoC (80%) and resumes corridor journey
             currentSocKwh = capacity * (targetSoc / 100.0);

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
+import 'ceb_tariff_card.dart';
 
 /// Range Anxiety Index (RAI) & Battery Reserve Safety HUD
 /// Highlights the 10% mandatory reserve floor, pre-departure veto status,
-/// Point of No Return (PNR), and environmental physics multipliers.
+/// Point of No Return (PNR), CEB Tariff trip cost optimization, and environmental physics multipliers.
 class RaiSafetyHud extends StatelessWidget {
   const RaiSafetyHud({
     super.key,
@@ -32,8 +33,19 @@ class RaiSafetyHud extends StatelessWidget {
     final score = report.score;
     final scoreColor = _scoreColor(score);
     final arrivalSoc = route.arrivalBatteryPercent;
-    final isReserveViolated = route.hasReserveViolation || arrivalSoc < minimumReserveFloorPercent;
+    final isReserveViolated =
+        route.hasReserveViolation || arrivalSoc < minimumReserveFloorPercent;
     final canNavigate = route.canInitiateNavigation && !isReserveViolated;
+
+    final currentTariff = CebTariffWindow.currentWindow();
+    final tripCostAtCurrentRate = route.estimatedTripCostLkr(
+      currentTariff.rateLkr,
+    );
+    final offPeakCost = route.estimatedTripCostLkr(
+      CebTariffWindow.offPeak.rateLkr,
+    );
+    final potentialSavingsLkr =
+        (tripCostAtCurrentRate - offPeakCost).clamp(0.0, 50000.0);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -87,12 +99,17 @@ class RaiSafetyHud extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          'Range Anxiety Index: ${report.label}',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white : const Color(0xFF102018),
+                        Flexible(
+                          child: Text(
+                            'Range Anxiety Index: ${report.label}',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF102018),
+                            ),
                           ),
                         ),
                       ],
@@ -113,7 +130,9 @@ class RaiSafetyHud extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (canNavigate ? const Color(0xFF00E676) : const Color(0xFFFF3D00))
+                  color: (canNavigate
+                          ? const Color(0xFF00E676)
+                          : const Color(0xFFFF3D00))
                       .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -123,7 +142,9 @@ class RaiSafetyHud extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.5,
-                    color: canNavigate ? const Color(0xFF00C853) : const Color(0xFFFF3D00),
+                    color: canNavigate
+                        ? const Color(0xFF00C853)
+                        : const Color(0xFFFF3D00),
                   ),
                 ),
               ),
@@ -143,7 +164,9 @@ class RaiSafetyHud extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isReserveViolated ? const Color(0xFFFF3D00) : const Color(0xFF00C853),
+                      color: isReserveViolated
+                          ? const Color(0xFFFF3D00)
+                          : const Color(0xFF00C853),
                     ),
                   ),
                   Text(
@@ -174,7 +197,9 @@ class RaiSafetyHud extends StatelessWidget {
                     child: Container(
                       height: 10,
                       decoration: BoxDecoration(
-                        color: isReserveViolated ? const Color(0xFFFF3D00) : const Color(0xFF00E676),
+                        color: isReserveViolated
+                            ? const Color(0xFFFF3D00)
+                            : const Color(0xFF00E676),
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -186,7 +211,7 @@ class RaiSafetyHud extends StatelessWidget {
                     top: 0,
                     bottom: 0,
                     child: Align(
-                      alignment: const Alignment(-0.80, 0), // (10% - 50%) * 2 = -0.80
+                      alignment: const Alignment(-0.80, 0),
                       child: Container(
                         width: 2.5,
                         height: 14,
@@ -213,7 +238,11 @@ class RaiSafetyHud extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, size: 20, color: Color(0xFFFF3D00)),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 20,
+                    color: Color(0xFFFF3D00),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -231,7 +260,7 @@ class RaiSafetyHud extends StatelessWidget {
             const SizedBox(height: 8),
           ],
 
-          // 4. Environmental Physics Badges
+          // 4. Environmental Physics & CEB Cost Optimizer Badges
           Wrap(
             spacing: 6,
             runSpacing: 4,
@@ -246,10 +275,17 @@ class RaiSafetyHud extends StatelessWidget {
                       ? const Color(0xFF00C853)
                       : const Color(0xFFFF9100),
                 ),
+              if (route.includeReturnTrip)
+                const _Chip(
+                  icon: Icons.sync_alt_rounded,
+                  label: 'Round-Trip Simulated',
+                  color: Color(0xFF00BFA5),
+                ),
               if (route.chargingStops.isNotEmpty)
                 _Chip(
                   icon: Icons.ev_station_rounded,
-                  label: '${route.chargingStops.length} Planned Stop${route.chargingStops.length > 1 ? "s" : ""}',
+                  label:
+                      '${route.chargingStops.length} Planned Stop${route.chargingStops.length > 1 ? "s" : ""}',
                   color: const Color(0xFF2979FF),
                 ),
               if (report.totalElevationGainM > 300)
@@ -257,6 +293,13 @@ class RaiSafetyHud extends StatelessWidget {
                   icon: Icons.terrain_rounded,
                   label: '+${report.totalElevationGainM.toStringAsFixed(0)}m Climb',
                   color: const Color(0xFFFF9100),
+                ),
+              if (route.totalEnergyConsumedKwh > 0)
+                _Chip(
+                  icon: Icons.bolt_rounded,
+                  label:
+                      'Est. LKR ${tripCostAtCurrentRate.toStringAsFixed(0)} (${currentTariff.name})${potentialSavingsLkr >= 50 ? " • Save LKR ${potentialSavingsLkr.toStringAsFixed(0)} Off-Peak" : ""}',
+                  color: const Color(0xFF00C853),
                 ),
             ],
           ),

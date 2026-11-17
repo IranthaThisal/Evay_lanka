@@ -11,9 +11,18 @@ import '../theme/app_theme.dart';
 import '../ui/ceb_tariff_card.dart';
 
 class BookingScreen extends StatefulWidget {
-  const BookingScreen({super.key, required this.charger});
+  const BookingScreen({
+    super.key,
+    required this.charger,
+    this.initialEta,
+    this.initialDurationMins,
+    this.initialArrivalSocPercent,
+  });
 
   final Charger charger;
+  final DateTime? initialEta;
+  final int? initialDurationMins;
+  final double? initialArrivalSocPercent;
 
   @override
   State<BookingScreen> createState() => _BookingScreenState();
@@ -49,6 +58,16 @@ class _BookingScreenState extends State<BookingScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialArrivalSocPercent != null) {
+      _currentBatteryPercent = widget.initialArrivalSocPercent!.clamp(5.0, 85.0);
+    }
+    if (widget.initialEta != null) {
+      _day = DateTime(
+        widget.initialEta!.year,
+        widget.initialEta!.month,
+        widget.initialEta!.day,
+      );
+    }
     final user = FirebaseAuth.instance.currentUser;
     _waitlistStream =
         user == null
@@ -90,27 +109,48 @@ class _BookingScreenState extends State<BookingScreen> {
         final pct = (data['batteryPercent'] as num?)?.toDouble();
 
         if (cap != null && cap > 0) _batteryCapacityKwh = cap;
-        if (pct != null && pct > 0) _currentBatteryPercent = pct;
+        if (widget.initialArrivalSocPercent == null &&
+            pct != null &&
+            pct > 0) {
+          _currentBatteryPercent = pct.clamp(5.0, 85.0);
+        }
       } catch (_) {}
     }
 
-    _calculateRecommendation();
+    _calculateRecommendation(applyInitialEta: true);
   }
 
-  void _calculateRecommendation() {
+  void _calculateRecommendation({bool applyInitialEta = false}) {
     final power = widget.charger.powerKw ?? 50.0;
-    final rawMins = BookingService.calculateRecommendedDurationMins(
-      batteryCapacityKwh: _batteryCapacityKwh,
-      currentBatteryPercent: _currentBatteryPercent,
-      stationPowerKw: power,
-    );
-    final stepMins = BookingService.roundToSlotStep(rawMins);
+    final rawMins =
+        widget.initialDurationMins ??
+        BookingService.calculateRecommendedDurationMins(
+          batteryCapacityKwh: _batteryCapacityKwh,
+          currentBatteryPercent: _currentBatteryPercent,
+          stationPowerKw: power,
+        );
+    final stepMins = BookingService.roundToSlotStep(rawMins.clamp(15, 180));
 
     if (mounted) {
       setState(() {
         _recommendedDurationMins = rawMins;
         _recommendedStepMins = stepMins;
         _durationMins = stepMins;
+
+        if (applyInitialEta && widget.initialEta != null) {
+          final slots = _buildSlots(_day);
+          if (slots.isNotEmpty) {
+            final target = widget.initialEta!;
+            DateTime? closest;
+            for (final s in slots) {
+              if (!s.isBefore(target)) {
+                closest = s;
+                break;
+              }
+            }
+            _selectedStart = closest ?? slots.last;
+          }
+        }
       });
     }
   }
@@ -147,15 +187,6 @@ class _BookingScreenState extends State<BookingScreen> {
         _bookingsStream = _createBookingsStreamForDay(picked);
       });
     }
-  }
-
-  bool _overlaps(
-    DateTime slotStart,
-    DateTime slotEnd,
-    DateTime bookedStart,
-    DateTime bookedEnd,
-  ) {
-    return slotStart.isBefore(bookedEnd) && slotEnd.isAfter(bookedStart);
   }
 
   Future<void> _confirmBooking(Map<DateTime, int> availabilityMap) async {
@@ -596,15 +627,16 @@ class _BookingScreenState extends State<BookingScreen> {
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      // Pre-extract booking time ranges once per snapshot
-                      final bookedRanges = <(DateTime, DateTime)>[];
+                      // Pre-extract active booking time ranges once per snapshot
+                      final now = DateTime.now();
+                      final bookedRanges = <(String, DateTime, DateTime)>[];
                       for (final doc in snap.data!.docs) {
                         final data = doc.data();
-                        if (data['status'] == 'cancelled') continue;
+                        final status = (data['status'] as String?) ?? 'booked';
                         final bStart = (data['startTime'] as Timestamp?)?.toDate();
                         final bEnd = (data['endTime'] as Timestamp?)?.toDate();
                         if (bStart != null && bEnd != null) {
-                          bookedRanges.add((bStart, bEnd));
+                          bookedRanges.add((status, bStart, bEnd));
                         }
                       }
 
@@ -617,7 +649,14 @@ class _BookingScreenState extends State<BookingScreen> {
 
                         for (var i = 0; i < bookedRanges.length; i++) {
                           final range = bookedRanges[i];
-                          if (_overlaps(slot, slotEnd, range.$1, range.$2)) {
+                          if (BookingService.isBookingActivelyHoldingSlot(
+                            status: range.$1,
+                            bookedStart: range.$2,
+                            bookedEnd: range.$3,
+                            slotStart: slot,
+                            slotEnd: slotEnd,
+                            referenceNow: now,
+                          )) {
                             overlaps++;
                           }
                         }

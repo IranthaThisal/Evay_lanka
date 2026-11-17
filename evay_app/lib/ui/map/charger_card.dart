@@ -19,6 +19,9 @@ class ChargerCard extends StatelessWidget {
     required this.buttonOnAccentColor,
     required this.goodColor,
     required this.isLight,
+    this.onBookAtEta,
+    this.onSwapAlternative,
+    this.alternativeCount = 0,
   });
 
   final Charger charger;
@@ -33,6 +36,9 @@ class ChargerCard extends StatelessWidget {
   final Color buttonOnAccentColor;
   final Color goodColor;
   final bool isLight;
+  final VoidCallback? onBookAtEta;
+  final VoidCallback? onSwapAlternative;
+  final int alternativeCount;
 
   Widget _metricChip(String text) {
     return Container(
@@ -56,8 +62,8 @@ class ChargerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Container(
-      width: 245,
-      padding: const EdgeInsets.all(16),
+      width: 265,
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: panelColor,
         borderRadius: BorderRadius.circular(24),
@@ -71,27 +77,68 @@ class ChargerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    charger.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: onPanelColor,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          charger.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w700,
+                            color: onPanelColor,
+                          ),
+                        ),
+                      ),
+                      if (onSwapAlternative != null && alternativeCount > 0)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: onSwapAlternative,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: accentColor.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.swap_horiz_rounded,
+                                  size: 13,
+                                  color: accentColor,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'Alt ($alternativeCount)',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: accentColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     charger.city.isEmpty ? l10n.t('sriLanka') : charger.city,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: onPanelMutedColor),
+                    style: TextStyle(color: onPanelMutedColor, fontSize: 12.5),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _metricChip(l10n.slotsCount(charger.slots)),
                       if (charger.powerKw != null)
@@ -106,18 +153,18 @@ class ChargerCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             meta,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: goodColor,
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -127,16 +174,34 @@ class ChargerCard extends StatelessWidget {
                     backgroundColor: isLight ? accentColor : Colors.white,
                     foregroundColor:
                         isLight ? buttonOnAccentColor : const Color(0xFF08141D),
-                    minimumSize: const Size(0, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
-                  child: Text(l10n.t('directions')),
+                  child: Text(
+                    l10n.t('directions'),
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
+              if (onBookAtEta != null) ...[
+                const SizedBox(width: 6),
+                FilledButton.tonalIcon(
+                  onPressed: onBookAtEta,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  icon: const Icon(Icons.schedule_send_rounded, size: 15),
+                  label: const Text(
+                    'Book ETA',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 6),
               SizedBox(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 child: IconButton(
                   onPressed: onDetails,
                   style: IconButton.styleFrom(
@@ -144,7 +209,7 @@ class ChargerCard extends StatelessWidget {
                     foregroundColor: onPanelColor,
                   ),
                   padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.ev_station, size: 20),
+                  icon: const Icon(Icons.ev_station, size: 19),
                 ),
               ),
             ],

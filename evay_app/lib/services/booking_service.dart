@@ -22,6 +22,28 @@ class BookingService {
       _db.collection('booking_waitlist');
 
   static const int slotStepMins = 30;
+  static final Map<String, DateTime> _lastRecycleByCharger = {};
+
+  /// Pure time-window check: returns true only if a booking is actively holding a slot
+  /// and has not already expired or been cancelled.
+  static bool isBookingActivelyHoldingSlot({
+    required String status,
+    required DateTime bookedStart,
+    required DateTime bookedEnd,
+    required DateTime slotStart,
+    required DateTime slotEnd,
+    DateTime? referenceNow,
+  }) {
+    final normalizedStatus = status.trim().toLowerCase();
+    if (normalizedStatus == 'cancelled' || normalizedStatus == 'completed') {
+      return false;
+    }
+    final now = referenceNow ?? DateTime.now();
+    if (!bookedEnd.isAfter(now)) {
+      return false;
+    }
+    return slotStart.isBefore(bookedEnd) && slotEnd.isAfter(bookedStart);
+  }
 
   /// Intelligent Slot Duration Recommendation:
   /// Auto-calculates the exact minutes needed to reach 80% charge based on:
@@ -91,10 +113,23 @@ class BookingService {
   }
 
   /// Automatic Expired Slot Recycling:
-  /// Background cleanup of past slots in Firestore to prevent stale lockouts.
-  Future<int> recycleExpiredSlots({String? chargerId}) async {
+  /// Background cleanup of past slots in Firestore to prevent stale lockouts,
+  /// debounced per charger to avoid redundant client batch writes.
+  Future<int> recycleExpiredSlots({
+    String? chargerId,
+    bool force = false,
+  }) async {
     try {
       final now = DateTime.now();
+      final cacheKey = chargerId ?? '__global__';
+      if (!force) {
+        final lastRun = _lastRecycleByCharger[cacheKey];
+        if (lastRun != null &&
+            now.difference(lastRun) < const Duration(minutes: 5)) {
+          return 0;
+        }
+      }
+      _lastRecycleByCharger[cacheKey] = now;
       final nowTs = Timestamp.fromDate(now);
       var recycledCount = 0;
 

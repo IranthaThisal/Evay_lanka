@@ -10,6 +10,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../l10n/app_localizations.dart';
 import '../models/charger.dart';
 import '../models/charger_checkin.dart';
+import '../models/ev_preset.dart';
 import '../models/range_anxiety.dart';
 import '../models/smart_route.dart';
 import '../services/charger_service.dart';
@@ -108,9 +109,12 @@ class _MapScreenState extends State<MapScreen> {
   bool _loadingVehicleProfile = false;
   bool _showTripPlanner = false;
   bool _availableOnly = false;
+  bool _includeReturnTrip = false;
   double _minPowerKw = 0;
   String _chargerMode = 'nearby';
   Set<String> _selectedConnectors = <String>{};
+  Set<String> _vehicleConnectors = <String>{};
+  String? _selectedPresetId;
   String? _statusText;
   String? _vehicleSummary;
 
@@ -262,25 +266,185 @@ class _MapScreenState extends State<MapScreen> {
                         padding: const EdgeInsets.only(top: 12),
                         child: _buildTripPlanner(chargers),
                       )
-                      : const SizedBox.shrink(key: ValueKey('hidden-planner')),
+                      : (_activeRoute != null
+                          ? Padding(
+                            key: const ValueKey('compact-route-pill'),
+                            padding: const EdgeInsets.only(top: 10),
+                            child: _buildCompactRoutePill(),
+                          )
+                          : const SizedBox.shrink(
+                            key: ValueKey('hidden-planner'),
+                          )),
             ),
-            const SizedBox(height: 12),
-            MapModeSelector(
-              currentMode: _chargerMode,
-              onModeSelected: (mode) => setState(() => _chargerMode = mode),
-              items: [
-                MapModeItem(label: l10n.t('nearby'), value: 'nearby'),
-                MapModeItem(label: l10n.t('onRoute'), value: 'route'),
-                MapModeItem(label: l10n.t('allChargers'), value: 'all'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: MapModeSelector(
+                    currentMode: _chargerMode,
+                    onModeSelected:
+                        (mode) => setState(() => _chargerMode = mode),
+                    items: [
+                      MapModeItem(label: l10n.t('nearby'), value: 'nearby'),
+                      MapModeItem(label: l10n.t('onRoute'), value: 'route'),
+                      MapModeItem(label: l10n.t('allChargers'), value: 'all'),
+                    ],
+                    accentColor: _accent,
+                    panelColor: _panel,
+                    panelBorderColor: _panelBorder,
+                    selectedTextColor: _buttonOnAccent,
+                    unselectedTextColor: _onPanel,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ValueListenableBuilder<ChargerDataSourceStatus>(
+                  valueListenable: _chargerService.statusNotifier,
+                  builder: (context, status, _) {
+                    final isLive =
+                        status != ChargerDataSourceStatus.seedSnapshot;
+                    final badgeColor =
+                        isLive
+                            ? const Color(0xFF00C853)
+                            : const Color(0xFFFFB300);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _panel.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: badgeColor.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: badgeColor,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isLive ? 'Live' : 'Seed',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _onPanel,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ],
-              accentColor: _accent,
-              panelColor: _panel,
-              panelBorderColor: _panelBorder,
-              selectedTextColor: _buttonOnAccent,
-              unselectedTextColor: _onPanel,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompactRoutePill() {
+    final destName =
+        _destinationController.text.trim().isEmpty
+            ? 'Destination'
+            : _destinationController.text.trim();
+    final distText =
+        _activeSmartRoute?.distanceText ?? _activeRoute?.distanceText ?? '';
+    final durText =
+        _activeSmartRoute?.durationText ?? _activeRoute?.durationText ?? '';
+    final stopsCount = _activeSmartRoute?.stopsCount ?? 0;
+
+    return _glassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.route_rounded, size: 18, color: _accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() => _showTripPlanner = true),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Origin → $destName',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _onPanel,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (_includeReturnTrip) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00BFA5).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Round-Trip',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF00BFA5),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$distText • $durText${stopsCount > 0 ? " • $stopsCount stop${stopsCount > 1 ? 's' : ''}" : " • Non-stop"}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: _onPanelMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Edit Trip',
+            onPressed: () => setState(() => _showTripPlanner = true),
+            icon: Icon(Icons.edit_road_rounded, size: 19, color: _onPanel),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Clear Route',
+            onPressed: _clearRoute,
+            icon: Icon(Icons.close_rounded, size: 19, color: _onPanelMuted),
+          ),
+        ],
       ),
     );
   }
@@ -502,21 +666,106 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _vehicleSummary ??
-                  (_loadingVehicleProfile
-                      ? 'Loading saved vehicle details...'
-                      : 'Add your vehicle in profile for faster RAI estimates.'),
-              style: TextStyle(
-                color: _onPanelMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+          SizedBox(
+            height: 30,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: kSriLankaEvPresets.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final preset = kSriLankaEvPresets[index];
+                final isSelected = _selectedPresetId == preset.id;
+                return ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  backgroundColor:
+                      isSelected
+                          ? _accent.withValues(alpha: 0.22)
+                          : _panelSoft,
+                  side: BorderSide(
+                    color: isSelected ? _accent : _panelBorder,
+                  ),
+                  label: Text(
+                    '${preset.displayName} (${preset.batteryKwh.toStringAsFixed(0)}kWh)',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: _onPanel,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedPresetId = preset.id;
+                      _batteryCapacityController.text = preset.batteryKwh
+                          .toStringAsFixed(1);
+                      _efficiencyController.text = preset.efficiencyKmPerKwh
+                          .toStringAsFixed(1);
+                      _vehicleConnectors = preset.connectors.toSet();
+                      _vehicleSummary =
+                          '${preset.displayName} • ${preset.batteryKwh.toStringAsFixed(1)} kWh (${preset.connectors.take(2).join("/")})';
+                    });
+                  },
+                );
+              },
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _vehicleSummary ??
+                      (_loadingVehicleProfile
+                          ? 'Loading saved vehicle details...'
+                          : 'Select an EV preset or enter custom specs.'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _onPanelMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap:
+                    () => setState(
+                      () => _includeReturnTrip = !_includeReturnTrip,
+                    ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _includeReturnTrip
+                            ? Icons.check_box_rounded
+                            : Icons.check_box_outline_blank_rounded,
+                        size: 16,
+                        color: _includeReturnTrip ? _accent : _onPanelMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Return Trip',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: _includeReturnTrip ? _onPanel : _onPanelMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -581,6 +830,8 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildRaiCard(RangeAnxietyReport report) {
     if (_activeSmartRoute != null) {
+      final startSoc =
+          double.tryParse(_batteryPercentController.text.trim()) ?? 65.0;
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -592,7 +843,14 @@ class _MapScreenState extends State<MapScreen> {
             routePoints: _activeSmartRoute!.routePoints,
             elevationGainM: _activeSmartRoute!.totalElevationGainM,
             elevationLossM: _activeSmartRoute!.totalElevationLossM,
-            elevationEnergyPenaltyKwh: _activeSmartRoute!.elevationEnergyPenaltyKwh,
+            elevationEnergyPenaltyKwh:
+                _activeSmartRoute!.elevationEnergyPenaltyKwh,
+            totalDistanceKm: _activeSmartRoute!.totalDistanceKm,
+            initialSocPercent: startSoc,
+            arrivalSocPercent: _activeSmartRoute!.arrivalBatteryPercent,
+            chargingStops: _activeSmartRoute!.chargingStops,
+            pnrDistanceKm:
+                report.pointOfNoReturn?.pointOfNoReturnKmFromOrigin,
           ),
         ],
       );
@@ -1068,11 +1326,26 @@ class _MapScreenState extends State<MapScreen> {
                             itemBuilder: (context, index) {
                               final charger = chargers[index];
                               final meta = _chargerMeta(charger);
+                              final plannedStop = _chargingStopFor(charger);
                               return ChargerCard(
                                 charger: charger,
                                 meta: meta,
                                 onDirections: () => _showRouteToCharger(charger),
                                 onDetails: () => _openChargerSheet(charger),
+                                onBookAtEta:
+                                    plannedStop != null
+                                        ? () => _openBookAtEta(plannedStop)
+                                        : null,
+                                onSwapAlternative:
+                                    (plannedStop != null &&
+                                            plannedStop.alternatives.isNotEmpty)
+                                        ? () => _showAlternativeStopPicker(
+                                          plannedStop,
+                                          chargers,
+                                        )
+                                        : null,
+                                alternativeCount:
+                                    plannedStop?.alternatives.length ?? 0,
                                 panelColor: _panel,
                                 onPanelColor: _onPanel,
                                 onPanelMutedColor: _onPanelMuted,
@@ -1192,6 +1465,13 @@ class _MapScreenState extends State<MapScreen> {
       if (data == null || !mounted) return;
 
       final batteryKwh = (data['batteryKwh'] as num?)?.toDouble();
+      final efficiencyKmPerKwh =
+          (data['efficiencyKmPerKwh'] as num?)?.toDouble();
+      final storedConnectors =
+          (data['connectorTypes'] as List?)
+              ?.map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toSet();
       final make = (data['vehicleMake'] as String?)?.trim();
       final model = (data['vehicleModel'] as String?)?.trim();
       final parts = [
@@ -1205,6 +1485,12 @@ class _MapScreenState extends State<MapScreen> {
           _batteryCapacityController.text = batteryKwh.toStringAsFixed(
             batteryKwh.truncateToDouble() == batteryKwh ? 0 : 1,
           );
+        }
+        if (efficiencyKmPerKwh != null && efficiencyKmPerKwh > 0) {
+          _efficiencyController.text = efficiencyKmPerKwh.toStringAsFixed(1);
+        }
+        if (storedConnectors != null && storedConnectors.isNotEmpty) {
+          _vehicleConnectors = storedConnectors;
         }
         _vehicleSummary =
             parts.isEmpty && batteryKwh == null
@@ -1284,6 +1570,8 @@ class _MapScreenState extends State<MapScreen> {
         efficiencyKmPerKwh: efficiency,
         conditions: _tripConditions,
         reliabilityScores: reliabilityScores,
+        preferredConnectors: _vehicleConnectors,
+        includeReturnTrip: _includeReturnTrip,
       );
       final route = RouteDetails(
         points: smartRoute.routePoints,
@@ -1308,7 +1596,7 @@ class _MapScreenState extends State<MapScreen> {
         _activeSmartRoute = smartRoute;
         _activeRangeAnxiety = raiReport;
         _chargerMode = 'route';
-        _showTripPlanner = true;
+        _showTripPlanner = false;
         _statusText = '${route.distanceText} - ${route.durationText}';
       });
 
@@ -1323,6 +1611,181 @@ class _MapScreenState extends State<MapScreen> {
         setState(() => _buildingRoute = false);
       }
     }
+  }
+
+  void _openBookAtEta(ChargingStop stop) {
+    final eta = DateTime.now().add(
+      Duration(minutes: stop.estimatedDriveMinutesFromOrigin),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => BookingScreen(
+              charger: stop.charger,
+              initialEta: eta,
+              initialDurationMins: stop.chargingTimeMinutes.round(),
+              initialArrivalSocPercent: stop.arrivalSocPercent,
+            ),
+      ),
+    );
+  }
+
+  void _showAlternativeStopPicker(
+    ChargingStop currentStop,
+    List<Charger> allChargers,
+  ) {
+    final options = [currentStop, ...currentStop.alternatives];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _panel,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Stop ${currentStop.stopOrder}: Compare Corridor Chargers',
+                style: TextStyle(
+                  color: _onPanel,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Select a faster DC charger or closer station for this leg.',
+                style: TextStyle(color: _onPanelMuted, fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < options.length; i++)
+                Builder(
+                  builder: (context) {
+                    final opt = options[i];
+                    final isCurrent = opt.charger.id == currentStop.charger.id;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color:
+                            isCurrent
+                                ? _accent.withValues(alpha: 0.14)
+                                : _panelSoft,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isCurrent ? _accent : _panelBorder,
+                        ),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        title: Text(
+                          opt.charger.name,
+                          style: TextStyle(
+                            color: _onPanel,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${opt.charger.powerKw?.toStringAsFixed(0) ?? "30"} kW • ${opt.distanceFromRouteKm.toStringAsFixed(1)} km detour • ~${opt.chargingTimeMinutes.toStringAsFixed(0)} min charge',
+                          style: TextStyle(color: _onPanelMuted, fontSize: 12),
+                        ),
+                        trailing:
+                            isCurrent
+                                ? Icon(Icons.check_circle, color: _accent)
+                                : OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    _swapPlannedStop(
+                                      currentStop,
+                                      opt,
+                                      allChargers,
+                                    );
+                                  },
+                                  child: const Text('Select'),
+                                ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _swapPlannedStop(
+    ChargingStop oldStop,
+    ChargingStop chosenAlt,
+    List<Charger> allChargers,
+  ) {
+    final activeSmart = _activeSmartRoute;
+    if (activeSmart == null) return;
+
+    // Preserve the full pool of alternatives when swapping
+    final allPool = [oldStop, ...oldStop.alternatives];
+    final nextAlternatives =
+        allPool
+            .where((s) => s.charger.id != chosenAlt.charger.id)
+            .map(
+              (s) => ChargingStop(
+                charger: s.charger,
+                distanceFromRouteKm: s.distanceFromRouteKm,
+                distanceFromOriginKm: s.distanceFromOriginKm,
+                score: s.score,
+                stopOrder: s.stopOrder,
+                arrivalSocPercent: s.arrivalSocPercent,
+                targetSocPercent: s.targetSocPercent,
+                chargingTimeMinutes: s.chargingTimeMinutes,
+                energyAddedKwh: s.energyAddedKwh,
+                elevationM: s.elevationM,
+              ),
+            )
+            .toList(growable: false);
+
+    final replacement = ChargingStop(
+      charger: chosenAlt.charger,
+      distanceFromRouteKm: chosenAlt.distanceFromRouteKm,
+      distanceFromOriginKm: chosenAlt.distanceFromOriginKm,
+      score: chosenAlt.score,
+      stopOrder: oldStop.stopOrder,
+      arrivalSocPercent: chosenAlt.arrivalSocPercent,
+      targetSocPercent: chosenAlt.targetSocPercent,
+      chargingTimeMinutes: chosenAlt.chargingTimeMinutes,
+      energyAddedKwh: chosenAlt.energyAddedKwh,
+      elevationM: chosenAlt.elevationM,
+      alternatives: nextAlternatives,
+    );
+
+    final updatedSmartRoute = activeSmart.withSwappedStop(
+      stopOrder: oldStop.stopOrder,
+      replacement: replacement,
+    );
+
+    final batteryCapacity =
+        double.tryParse(_batteryCapacityController.text.trim()) ?? 50.3;
+    final batteryPercent =
+        double.tryParse(_batteryPercentController.text.trim()) ?? 65.0;
+    final efficiency =
+        double.tryParse(_efficiencyController.text.trim()) ?? 6.0;
+
+    final updatedReport = _rangeAnxietyService.buildReport(
+      smartRoute: updatedSmartRoute,
+      batteryCapacityKwh: batteryCapacity,
+      batteryPercent: batteryPercent,
+      efficiencyKmPerKwh: efficiency,
+      conditions: _tripConditions,
+      availableChargers: allChargers,
+    );
+
+    setState(() {
+      _activeSmartRoute = updatedSmartRoute;
+      _activeRangeAnxiety = updatedReport;
+      _statusText =
+          'Swapped Stop ${oldStop.stopOrder} to ${replacement.charger.name} (~${replacement.chargingTimeMinutes.toStringAsFixed(0)}m charge)';
+    });
   }
 
   Future<void> _showRouteToCharger(Charger charger) async {

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/ev_preset.dart';
 import '../theme/app_theme.dart';
 
 class VehicleAddScreen extends StatefulWidget {
@@ -35,6 +36,9 @@ class _VehicleAddScreenState extends State<VehicleAddScreen> {
   final _make = TextEditingController();
   final _model = TextEditingController();
   final _battery = TextEditingController();
+  double _efficiencyKmPerKwh = 6.0;
+  List<String> _connectors = const ['CCS2', 'Type 2'];
+  String? _selectedPresetId;
 
   bool _saving = false;
 
@@ -52,6 +56,17 @@ class _VehicleAddScreenState extends State<VehicleAddScreen> {
     _model.dispose();
     _battery.dispose();
     super.dispose();
+  }
+
+  void _applyPreset(EvPreset preset) {
+    setState(() {
+      _selectedPresetId = preset.id;
+      _make.text = preset.make;
+      _model.text = preset.model;
+      _battery.text = preset.batteryKwh.toStringAsFixed(1);
+      _efficiencyKmPerKwh = preset.efficiencyKmPerKwh;
+      _connectors = preset.connectors;
+    });
   }
 
   Future<void> _save() async {
@@ -77,6 +92,8 @@ class _VehicleAddScreenState extends State<VehicleAddScreen> {
         'vehicleMake': make,
         'vehicleModel': model,
         'batteryKwh': battery,
+        'efficiencyKmPerKwh': _efficiencyKmPerKwh,
+        'connectorTypes': _connectors,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -110,6 +127,8 @@ class _VehicleAddScreenState extends State<VehicleAddScreen> {
                 onSave: _save,
                 showHeader: true,
                 submitLabel: widget.submitLabel,
+                selectedPresetId: _selectedPresetId,
+                onSelectPreset: _applyPreset,
               ),
             ),
           ),
@@ -130,6 +149,9 @@ class _VehicleAddDialogState extends State<_VehicleAddDialog> {
   final _make = TextEditingController();
   final _model = TextEditingController();
   final _battery = TextEditingController();
+  double _efficiencyKmPerKwh = 6.0;
+  List<String> _connectors = const ['CCS2', 'Type 2'];
+  String? _selectedPresetId;
 
   bool _saving = false;
 
@@ -139,6 +161,17 @@ class _VehicleAddDialogState extends State<_VehicleAddDialog> {
     _model.dispose();
     _battery.dispose();
     super.dispose();
+  }
+
+  void _applyPreset(EvPreset preset) {
+    setState(() {
+      _selectedPresetId = preset.id;
+      _make.text = preset.make;
+      _model.text = preset.model;
+      _battery.text = preset.batteryKwh.toStringAsFixed(1);
+      _efficiencyKmPerKwh = preset.efficiencyKmPerKwh;
+      _connectors = preset.connectors;
+    });
   }
 
   Future<void> _save() async {
@@ -164,6 +197,8 @@ class _VehicleAddDialogState extends State<_VehicleAddDialog> {
         'vehicleMake': make,
         'vehicleModel': model,
         'batteryKwh': battery,
+        'efficiencyKmPerKwh': _efficiencyKmPerKwh,
+        'connectorTypes': _connectors,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -184,7 +219,7 @@ class _VehicleAddDialogState extends State<_VehicleAddDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 430),
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(18),
           child: _VehicleAddCard(
             make: _make,
@@ -194,6 +229,8 @@ class _VehicleAddDialogState extends State<_VehicleAddDialog> {
             onSave: _save,
             showHeader: false,
             submitLabel: null,
+            selectedPresetId: _selectedPresetId,
+            onSelectPreset: _applyPreset,
           ),
         ),
       ),
@@ -210,6 +247,8 @@ class _VehicleAddCard extends StatelessWidget {
     required this.onSave,
     required this.showHeader,
     required this.submitLabel,
+    this.selectedPresetId,
+    this.onSelectPreset,
   });
 
   final TextEditingController make;
@@ -219,6 +258,8 @@ class _VehicleAddCard extends StatelessWidget {
   final VoidCallback onSave;
   final bool showHeader;
   final String? submitLabel;
+  final String? selectedPresetId;
+  final ValueChanged<EvPreset>? onSelectPreset;
 
   @override
   Widget build(BuildContext context) {
@@ -228,13 +269,16 @@ class _VehicleAddCard extends StatelessWidget {
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showHeader)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: Text(
-              l10n.t('vehicleInformation'),
-              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+            child: Center(
+              child: Text(
+                l10n.t('vehicleInformation'),
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         Container(
@@ -254,13 +298,46 @@ class _VehicleAddCard extends StatelessWidget {
               const SizedBox(height: 8),
               Image.asset(
                 'assets/images/ev_car.png',
-                height: 90,
+                height: 84,
                 fit: BoxFit.contain,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        if (onSelectPreset != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Quick EV Presets (Sri Lanka)',
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: kSriLankaEvPresets.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final preset = kSriLankaEvPresets[index];
+                final isSelected = selectedPresetId == preset.id;
+                return ChoiceChip(
+                  label: Text(
+                    '${preset.displayName} (${preset.batteryKwh.toStringAsFixed(0)}kWh)',
+                    style: const TextStyle(fontSize: 11.5),
+                  ),
+                  selected: isSelected,
+                  onSelected: (_) => onSelectPreset!(preset),
+                  visualDensity: VisualDensity.compact,
+                );
+              },
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
         TextField(
           controller: make,
           decoration: InputDecoration(
@@ -296,9 +373,11 @@ class _VehicleAddCard extends StatelessWidget {
             child: Text(saving ? l10n.t('saving') : (submitLabel ?? l10n.t('addVehicle'))),
           ),
         ),
-        TextButton(
-          onPressed: saving ? null : () => Navigator.pop(context),
-          child: Text(l10n.t('addLater')),
+        Center(
+          child: TextButton(
+            onPressed: saving ? null : () => Navigator.pop(context),
+            child: Text(l10n.t('addLater')),
+          ),
         ),
       ],
     );
